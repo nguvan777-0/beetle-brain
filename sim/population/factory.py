@@ -2,7 +2,7 @@
 import numpy as np
 from sim.config import N_FOOD, N_START, N_INPUTS, N_HIDDEN, N_OUTPUTS, ENERGY_START, WIDTH, HEIGHT
 from sim.population.genome import decode, N_BODY
-from sim.vents import make_vents, spawn_near_vents
+from sim.vents import make_vents, spawn_near_vents, refill_vents
 
 
 def make_pop(n, rng):
@@ -29,5 +29,5 @@ def new_world(rng=None, world_seed=None):
         rng = np.random.default_rng()
     vents = make_vents(world_seed)
     pop   = make_pop(N_START, rng)
-    food  = spawn_near_vents(N_FOOD, vents, rng)
+    food  = refill_vents(np.empty((0, 2), dtype=np.float32), vents, rng, N_FOOD // len(vents))
     return pop, food, vents
