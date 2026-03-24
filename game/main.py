@@ -6,10 +6,12 @@ import pygame
 import sim
 from sim import new_world, tick as sim_tick, init_ane, DRAIN_SCALE
 from sim import phylo
+from sim.stats import StatsCollector, SAMPLE_EVERY
 from game.renderer import draw_organism, draw_rays, draw_food
 from game.panel import draw_panel, PANEL_W
 from game.panel.hud import _anc_color
 from game.snapshot import save_snapshot, load_snapshot
+from report import generate as generate_report
 
 FPS          = 60
 SPEED_STEPS  = [1, 5, 20, 0]   # 0 = headless (no render)
@@ -42,6 +44,9 @@ def main():
     vents = world['vents']
     lineage_history = []
     last_pop        = pop
+    stats           = StatsCollector()
+    next_sample     = SAMPLE_EVERY
+    t_world_start   = time.time()
 
     sel_idx       = None
     sim_speed_idx = 0
@@ -49,6 +54,9 @@ def main():
     while True:
         # ── game over ────────────────────────────────────────────────────────
         if len(pop['x']) == 0:
+            if stats.samples:  # only report once per extinction
+                _exit_with_report(stats, tick, world, t_world_start, extinct=True)
+            stats = StatsCollector(); next_sample = SAMPLE_EVERY; t_world_start = time.time()
             # redraw last known world state so panel stays readable
             surf.fill((10, 10, 18))
             draw_food(surf, food, vents)
@@ -75,9 +83,11 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 save_snapshot(world, tick, history, hall_fame)
+                _exit_with_report(stats, tick, world, t_world_start, extinct=False)
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 save_snapshot(world, tick, history, hall_fame)
+                _exit_with_report(stats, tick, world, t_world_start, extinct=False)
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_l:
                 result = load_snapshot(rng)
@@ -97,6 +107,7 @@ def main():
                 world = new_world(rng)
                 pop = world['pop']; food = world['food']; vents = world['vents']
                 tick = 0; history = []; hall_fame = []; lineage_history = []; sel_idx = None
+                stats = StatsCollector(); next_sample = SAMPLE_EVERY; t_world_start = time.time()
 
         # ── tick ─────────────────────────────────────────────────────────────
         steps = SPEED_STEPS[sim_speed_idx] or 80
@@ -108,6 +119,11 @@ def main():
             tick += 1
             if len(pop['x']) == 0:
                 break
+            # ── stats sampling ────────────────────────────────────────────────
+            if tick >= next_sample:
+                stats.record(tick, pop, world['phylo'])
+                next_sample += SAMPLE_EVERY
+
             # ── history (inside loop so no ticks are skipped) ─────────────────
             if tick % 30 == 0:
                 history.append((
@@ -176,6 +192,14 @@ def main():
 
         pygame.display.flip()
         clock.tick(FPS)
+
+
+def _exit_with_report(stats, tick, world, t_start, extinct):
+    import time
+    elapsed = time.time() - t_start
+    pop = world['pop'] if not extinct else None
+    stats.finalize(tick, elapsed, pop=pop, phylo_state=world['phylo'], extinct=extinct)
+    generate_report(stats)
 
 
 def _draw_extinction_overlay(surf, font, font_lg, tick):
