@@ -1,7 +1,15 @@
 """Main stats panel drawn on the right side of the screen."""
 import numpy as np
 import pygame
-from sim.config import SPEED_MAX, SIZE_MAX, MUTATION_RATE_MAX, DRAIN_SCALE, N_START, WIDTH, HEIGHT, VENT_RADIUS
+from sim.config import (
+    SPEED_MIN, SPEED_MAX, FOV_MIN, FOV_MAX, RAY_MIN, RAY_MAX,
+    SIZE_MIN, SIZE_MAX, MUTATION_RATE_MIN, MUTATION_RATE_MAX,
+    MUTATION_SCALE_MIN, MUTATION_SCALE_MAX, EPIGENETIC_MIN, EPIGENETIC_MAX,
+    WEIGHT_DECAY_MIN, WEIGHT_DECAY_MAX, MOUTH_MIN, MOUTH_MAX,
+    ENERGY_MAX_MIN, ENERGY_MAX_MAX, PRED_RATIO_MIN, PRED_RATIO_MAX,
+    SPEED_SCALE_MIN, SPEED_SCALE_MAX, BREED_AT_MIN, BREED_AT_MAX,
+    CLONE_WITH_MIN, CLONE_WITH_MAX, DRAIN_SCALE, N_START, WIDTH, HEIGHT, VENT_RADIUS,
+)
 from sim.population.genome import N_BODY
 from game.panel.sparkline import draw_sparkline
 
@@ -52,6 +60,72 @@ def _draw_vent_map(surf, pop, vents, rect):
         wx    = rx + int(pop['x'][i] * sx)
         wy    = ry + int(pop['y'][i] * sy)
         surf.set_at((wx, wy), color)
+
+
+def _lerp_color(t, lo=(60, 100, 200), mid=(60, 200, 120), hi=(220, 80, 60)):
+    """Blue→green→red gradient for 0→1."""
+    if t < 0.5:
+        s = t * 2
+        return tuple(int(lo[i] + (mid[i] - lo[i]) * s) for i in range(3))
+    s = (t - 0.5) * 2
+    return tuple(int(mid[i] + (hi[i] - mid[i]) * s) for i in range(3))
+
+
+def _draw_trait_heatmap(surf, pop, rect, font_sm):
+    """One row per trait: p10–p90 band + median tick, colored by median position."""
+    if len(pop['x']) < 2:
+        return
+    rx, ry, rw, rh = rect
+
+    traits = [
+        ('speed',  pop['speed'],                   SPEED_MIN,        SPEED_MAX),
+        ('fov',    np.degrees(pop['fov']),          np.degrees(FOV_MIN), np.degrees(FOV_MAX)),
+        ('ray',    pop['ray_len'],                  RAY_MIN,          RAY_MAX),
+        ('size',   pop['size'],                     SIZE_MIN,         SIZE_MAX),
+        ('turn',   pop['turn_s'],                   0.05,             0.30),
+        ('breed@', pop['breed_at'],                 BREED_AT_MIN,     BREED_AT_MAX),
+        ('clone',  pop['clone_with'],               CLONE_WITH_MIN,   CLONE_WITH_MAX),
+        ('mut.r',  pop['mutation_rate'],            MUTATION_RATE_MIN, MUTATION_RATE_MAX),
+        ('mut.s',  pop['mutation_scale'],           MUTATION_SCALE_MIN, MUTATION_SCALE_MAX),
+        ('epig',   pop['epigenetic'],               EPIGENETIC_MIN,   EPIGENETIC_MAX),
+        ('decay',  pop['weight_decay'],             WEIGHT_DECAY_MIN, WEIGHT_DECAY_MAX),
+        ('mouth',  pop['mouth'],                    MOUTH_MIN,        MOUTH_MAX),
+        ('emax',   pop['energy_max'],               ENERGY_MAX_MIN,   ENERGY_MAX_MAX),
+        ('pred×',  pop['pred_ratio'],               PRED_RATIO_MIN,   PRED_RATIO_MAX),
+        ('spscl',  pop['speed_scale'],              SPEED_SCALE_MIN,  SPEED_SCALE_MAX),
+    ]
+
+    lbl_w  = 38
+    bar_x  = rx + lbl_w
+    bar_w  = rw - lbl_w - 4
+    row_h  = max(6, rh // len(traits))
+
+    for i, (name, vals, lo, hi) in enumerate(traits):
+        ty   = ry + i * row_h
+        span = hi - lo if hi != lo else 1.0
+
+        p10    = float(np.percentile(vals, 10))
+        median = float(np.percentile(vals, 50))
+        p90    = float(np.percentile(vals, 90))
+
+        n_p10    = (p10    - lo) / span
+        n_med    = (median - lo) / span
+        n_p90    = (p90    - lo) / span
+
+        color = _lerp_color(np.clip(n_med, 0, 1))
+        dim   = tuple(c // 4 for c in color)
+
+        # background track
+        pygame.draw.rect(surf, (20, 20, 32), (bar_x, ty + 1, bar_w, row_h - 2))
+        # p10–p90 band
+        bx = bar_x + int(np.clip(n_p10, 0, 1) * bar_w)
+        bw = max(1, int((np.clip(n_p90, 0, 1) - np.clip(n_p10, 0, 1)) * bar_w))
+        pygame.draw.rect(surf, dim, (bx, ty + 1, bw, row_h - 2))
+        # median tick
+        mx = bar_x + int(np.clip(n_med, 0, 1) * bar_w)
+        pygame.draw.rect(surf, color, (mx - 1, ty, 3, row_h))
+        # label
+        surf.blit(font_sm.render(name, True, (120, 130, 150)), (rx, ty))
 
 
 def _draw_pca_scatter(surf, pop, rect):
@@ -167,19 +241,12 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         y += 16
         sep()
 
-        # ── trait sparklines ─────────────────────────────────────────────────
-        txt("TRAITS  (pop avg)", font, (160, 180, 220))
-        if len(history) > 1:
-            for label, col_idx, color, lo, hi in [
-                ("speed",    3, (100, 200, 255), 0, SPEED_MAX),
-                ("size",     5, (255, 180, 100), 0, SIZE_MAX),
-                ("mut rate", 6, (255, 100, 100), 0, MUTATION_RATE_MAX),
-            ]:
-                data = [h[col_idx] for h in history]
-                lbl_surf = font_sm.render(f"  {label}", True, color)
-                surf.blit(lbl_surf, (px + 10, y))
-                draw_sparkline(surf, data, (px + 90, y, PANEL_W - 100, 14), color, lo, hi)
-                y += 18
+        # ── trait heatmap ────────────────────────────────────────────────────
+        txt("TRAITS  (median  |  p10–p90 band)", font, (160, 180, 220))
+        n_traits = 15
+        hmap_h   = n_traits * 9
+        _draw_trait_heatmap(surf, pop, (px + 8, y, PANEL_W - 16, hmap_h), font_sm)
+        y += hmap_h + 4
         sep()
 
         # ── PCA scatter ──────────────────────────────────────────────────────
