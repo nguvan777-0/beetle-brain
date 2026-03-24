@@ -89,13 +89,13 @@ report.py            self-contained plotly HTML report (not committed)
 uv run --with numpy --with pygame --with coremltools --with plotly python world.py
 ```
 
-With pygame — runs the game. Without pygame — runs headless at max speed for N seconds (default 30):
+Without pygame — runs headless at max speed for N seconds (default 30):
 
 ```bash
 uv run --with numpy --with coremltools --with plotly python world.py 60
 ```
 
-First run compiles the CoreML brain model (~1s), cached to `build/brain.mlpackage`.
+`plotly` is optional — drop it and the report is skipped. First run compiles the CoreML brain model (~1s), cached to `build/brain.mlpackage`.
 
 **Keys:** `SPACE` cycle speed (1×/5×/20×/headless) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
