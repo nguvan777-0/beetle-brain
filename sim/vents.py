@@ -4,10 +4,12 @@ from sim.config import WIDTH, HEIGHT, WORLD_SEED, VENT_COUNT_MIN, VENT_COUNT_MAX
 
 
 def make_vents(seed=None):
-    """Generate vent positions deterministically from seed."""
+    """Generate vent positions deterministically from seed.
+    Vents are kept VENT_RADIUS away from all edges so food never wraps."""
     rng = np.random.default_rng(WORLD_SEED if seed is None else seed)
     n   = int(rng.integers(VENT_COUNT_MIN, VENT_COUNT_MAX + 1))
-    return rng.uniform(0, [WIDTH, HEIGHT], size=(n, 2)).astype(np.float32)
+    m   = VENT_RADIUS
+    return rng.uniform([m, m], [WIDTH - m, HEIGHT - m], size=(n, 2)).astype(np.float32)
 
 
 def spawn_near_vents(n, vents, rng):
