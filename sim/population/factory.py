@@ -1,4 +1,5 @@
 """Create new populations and worlds."""
+import colorsys
 import numpy as np
 from sim.config import N_FOOD, N_START, N_INPUTS, N_HIDDEN, N_OUTPUTS, ENERGY_START, WIDTH, HEIGHT
 from sim.population.genome import decode, N_BODY
@@ -6,8 +7,21 @@ from sim.vents import make_vents, spawn_near_vents, refill_vents
 from sim import phylo
 
 
+def _logit(x):
+    x = np.clip(x, 1e-6, 1 - 1e-6)
+    return np.log(x / (1 - x))
+
+
 def make_pop(n, rng, phylo_state):
     W_body = rng.standard_normal((n, N_BODY)).astype(np.float32)
+
+    # seed body color (indices 4-6) from founder phylo hue so body starts aligned with lineage
+    for i in range(n):
+        hue = float(phylo_state['hue'][i])
+        r, g, b = colorsys.hsv_to_rgb(hue, 0.85, 0.9)
+        W_body[i, 4] = _logit((r * 255 - 40) / 215)   # r gene
+        W_body[i, 5] = _logit((g * 255 - 40) / 215)   # g gene
+        W_body[i, 6] = _logit((b * 255 - 40) / 215)   # b gene
     W1     = (rng.standard_normal((n, N_INPUTS, N_HIDDEN)) * 0.8).astype(np.float32)
     W2     = (rng.standard_normal((n, N_HIDDEN, N_OUTPUTS)) * 0.8).astype(np.float32)
     t = decode(W_body)
