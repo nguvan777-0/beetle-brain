@@ -223,7 +223,7 @@ def main():
 
     pygame.init()
     surf    = pygame.display.set_mode((TOTAL_W, HEIGHT))
-    pygame.display.set_caption("beetle-brain")
+    pygame.display.set_caption("beetle-brain  |  wight")
     clock   = pygame.time.Clock()
     font    = pygame.font.SysFont("monospace", 12)
     font_sm = pygame.font.SysFont("monospace", 10)

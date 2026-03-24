@@ -2,12 +2,15 @@
 sim.py — vectorized beetle-brain simulation engine
 ===================================================
 The entire population lives in numpy arrays.
-No Python loop over organisms — one tick = a handful of numpy calls.
+No Python loop over wights — one tick = a handful of numpy calls.
 
 Sensing is O(1) per organism via a rasterized world grid:
   - food and organisms are painted into a (2, GH, GW) uint8 grid
   - each organism ray-marches N_RAYS × MAX_STEPS pixels — always the same
   - adding more organisms doesn't slow down sensing at all
+
+Wight genome = W_body (9 floats) + W1 (180 floats) + W2 (24 floats) = 213 floats.
+The wight IS its weights. Nothing else.
 
 Population dict keys:
     x, y, angle, energy                    — physics  (N,)
