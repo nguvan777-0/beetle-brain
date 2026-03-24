@@ -50,9 +50,10 @@ class StatsCollector:
         }
         self.run_meta   = {}
         # lineage river: {ancestor_id: [(tick, count), ...]}
-        self._lineage_series  = {}
-        # hue per ancestor id — set once on first appearance
-        self._lineage_hues    = {}
+        self._lineage_series     = {}
+        self._lineage_hues       = {}
+        self._lineage_first_tick = {}
+        self._lineage_parent_map = {}   # {child_uid: parent_uid}
 
     # ── sampling ─────────────────────────────────────────────────────────────
 
@@ -87,7 +88,13 @@ class StatsCollector:
             for uid, cnt in zip(uids.tolist(), counts.tolist()):
                 lineage_counts[uid] = cnt
                 if uid not in self._lineage_hues:
-                    self._lineage_hues[uid] = float(phylo_state['hue'][uid % _phylo.M])
+                    self._lineage_hues[uid]       = float(phylo_state['hue'][uid % _phylo.M])
+                    self._lineage_first_tick[uid]  = tick
+                    # find parent lineage: ancestor of uid's immediate parent at same depth
+                    imm_parent = int(phylo_state['parent'][uid % _phylo.M])
+                    if imm_parent >= 0:
+                        plid = int(_phylo.ancestor_at(np.array([imm_parent], dtype=np.int32), depth, phylo_state)[0])
+                        self._lineage_parent_map[uid] = plid
             for uid, cnt in lineage_counts.items():
                 self._lineage_series.setdefault(uid, []).append((tick, cnt))
 
