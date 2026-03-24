@@ -11,12 +11,12 @@ n_start        = 12         # primordial soup
 seed           = 42         # world seed — same seed → same vent layout
 vent_count_min = 3
 vent_count_max = 5
-vent_radius    = 65.0       # food spawns within this radius of a vent (px)
+vent_radius    = 150.0      # food spawns within this radius; density ∝ 1/r²
 
 [energy]
 start       = 120.0
 max         = 200.0
-food        = 12.0      # energy gained per food eaten
+food        = 4.0       # energy per food item (flat — density does the work)
 mouth_min        = 1.0   # tiny mouth — hard to eat
 mouth_max        = 8.0   # huge mouth — filter feeder
 energy_max_min   = 150.0 # lean — can't store much
