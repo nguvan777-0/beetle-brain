@@ -19,7 +19,6 @@ SPEED_MIN       = _cfg["traits"]["speed_min"]; SPEED_MAX  = _cfg["traits"]["spee
 FOV_MIN         = _cfg["traits"]["fov_min"];   FOV_MAX    = _cfg["traits"]["fov_max"]
 RAY_MIN         = _cfg["traits"]["ray_min"];   RAY_MAX    = _cfg["traits"]["ray_max"]
 SIZE_MIN        = _cfg["traits"]["size_min"];  SIZE_MAX   = _cfg["traits"]["size_max"]
-DRAIN_MIN       = _cfg["traits"]["drain_min"]; DRAIN_MAX  = _cfg["traits"]["drain_max"]
 
 ENERGY_START      = _cfg["energy"]["start"]
 ENERGY_MAX        = _cfg["energy"]["max"]
@@ -53,6 +52,7 @@ AGING_ENABLED     = _cfg["aging"]["enabled"]
 WEIGHT_DECAY_MIN  = _cfg["aging"]["weight_decay_min"]
 WEIGHT_DECAY_MAX  = _cfg["aging"]["weight_decay_max"]
 
+DRAIN_SCALE     = _cfg["metabolism"]["drain_scale"]
 SIZE_TAX        = _cfg["metabolism"]["size_tax"]
 SPEED_TAX       = _cfg["metabolism"]["speed_tax"]
 AGE_TAX         = _cfg["metabolism"]["age_tax"]

@@ -42,7 +42,7 @@ while True:
         print(f"{tick:8d} {N:5d} {int(pop['generation'].max()):7d} "
               f"{int(pop['age'].max()):7d} {int(pop['eaten'].max()):7d} "
               f"{pop['speed'].mean():7.2f} {pop['size'].mean():6.1f} "
-              f"{pop['drain'].mean():7.3f}  {elapsed:.1f}s")
+              f"{(0.015 * pop['size']**0.75).mean():7.3f}  {elapsed:.1f}s")
         next_report += REPORT_EVERY
 
 elapsed = time.time() - t0
@@ -53,4 +53,4 @@ if len(pop['x']) > 0:
     print(f"\nFINAL pop={len(pop['x'])}  maxGen={pop['generation'].max()}  "
           f"maxAge={pop['age'].max()}  maxAte={pop['eaten'].max()}")
     print(f"  avg speed={pop['speed'].mean():.2f}  size={pop['size'].mean():.1f}  "
-          f"drain={pop['drain'].mean():.3f}  fov={np.degrees(pop['fov'].mean()):.0f}°")
+          f"drain={(0.015 * pop['size']**0.75).mean():.3f}  fov={np.degrees(pop['fov'].mean()):.0f}°")
