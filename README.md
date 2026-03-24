@@ -52,7 +52,7 @@ All traits are decoded from `W_body` (18 floats) via sigmoid into their ranges. 
 ## Package architecture
 
 ```
-world.py             entry point (3 lines)
+world.py             entry point — pygame if available, headless otherwise
 sim/                 pure numpy — tick(world, rng) → world, no globals
   config.py          all constants from config.toml
   tick.py            one simulation step
@@ -86,30 +86,28 @@ report.py            self-contained plotly HTML report (not committed)
 ## Run
 
 ```bash
-uv run --with numpy --with pygame --with coremltools python world.py
+uv run --with numpy --with pygame --with coremltools --with plotly python world.py
+```
+
+With pygame — runs the game. Without pygame — runs headless at max speed for N seconds (default 30):
+
+```bash
+uv run --with numpy --with coremltools --with plotly python world.py 60
 ```
 
 First run compiles the CoreML brain model (~1s), cached to `build/brain.mlpackage`.
-
-**Headless** (no pygame needed):
-
-```bash
-uv run --with numpy --with coremltools --with plotly python run_headless.py 30
-```
-
-Runs for 30 seconds at max speed, printing population stats every 500 ticks. Writes `report.html` on completion.
 
 **Keys:** `SPACE` cycle speed (1×/5×/20×/headless) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
 ## run report
 
-Both the headless run and the pygame sim generate `report.html` on exit (ESC, quit, or extinction). Open it in any browser — fully offline, no CDN.
+Generates `report.html` on exit (ESC, quit, or extinction). Open in any browser — fully offline.
 
-- **lineage river** — stacked area per lineage colored by phylo hue. forks, takeovers, and extinctions visible at a glance
-- **genome heatmap** — all 18 genes × time, normalized within each gene's range. selection vs neutral drift in one view
-- **phase scatter** — size vs pred_ratio at the final snapshot, colored by lineage, sized by speed
-- **drain breakdown** — Kleiber + speed² + size² + sensing cost, stacked per tick
-- **hall of fame** — longest-lived, most kills, highest generation with full trait snapshot and lineage hue
+- **lineage tree** — forks over time, node size = dominance, color = phylo hue
+- **genome heatmap** — all 18 genes × time, normalized within each gene's range
+- **phase scatter** — size vs pred_ratio at final snapshot, colored by lineage
+- **drain breakdown** — Kleiber + speed² + size² + sensing cost, stacked
+- **hall of fame** — longest-lived, most kills, highest generation
 
 ## Tuning the world
 
