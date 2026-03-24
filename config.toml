@@ -13,8 +13,10 @@ n_start     = 12         # primordial soup
 start       = 120.0
 max         = 200.0
 food        = 12.0      # energy gained per food eaten
-breed_at    = 160.0     # energy threshold to clone
-clone_with  = 80.0      # energy child and parent get after cloning
+breed_at_min  = 90.0    # r-strategists breed early and cheap
+breed_at_max  = 180.0   # K-strategists wait and invest
+clone_with_min = 25.0   # give offspring little (must be < breed_at_min)
+clone_with_max = 85.0   # give offspring a lot
 
 [traits]
 # each trait is decoded from W_body via sigmoid into [min, max]
@@ -35,13 +37,17 @@ n_hidden    = 12        # hidden layer size (also h_state size)
 n_outputs   = 2         # turn, speed
 
 [evolution]
-mutation_rate   = 0.12  # probability any single weight mutates
-mutation_scale  = 0.15  # magnitude of mutation noise
-epigenetic      = 0.25  # fraction of parent h_state inherited at birth
+mutation_rate_min  = 0.01   # conservative mutators
+mutation_rate_max  = 0.50   # hypermutators
+mutation_scale_min = 0.02   # fine-grained changes
+mutation_scale_max = 0.50   # wild leaps
+epigenetic_min  = 0.0   # children start fresh (no memory inheritance)
+epigenetic_max  = 1.0   # children inherit full parent brain state
 
 [aging]
-enabled         = true
-weight_decay    = 0.00002   # weights multiply by (1 - decay) each tick
+enabled          = true
+weight_decay_min = 0.000005  # slow agers — live long, drift slowly
+weight_decay_max = 0.0001    # fast agers — die young, mutate fast
                             # at decay=0.00002: ~86% remain after 8000 ticks
                             # lower = longer lived,  higher = faster aging
 

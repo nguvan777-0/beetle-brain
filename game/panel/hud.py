@@ -1,7 +1,8 @@
 """Main stats panel drawn on the right side of the screen."""
 import numpy as np
 import pygame
-from sim.config import N_BODY, SPEED_MAX, SIZE_MAX, DRAIN_MAX
+from sim.config import SPEED_MAX, SIZE_MAX, DRAIN_MAX
+from sim.population.genome import N_BODY
 from game.panel.sparkline import draw_sparkline
 
 PANEL_W = 320
