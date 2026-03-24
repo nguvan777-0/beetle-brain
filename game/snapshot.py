@@ -3,25 +3,26 @@ import os
 import numpy as np
 from sim.config import N_HIDDEN
 from sim.population.genome import decode
+from sim.vents import make_vents
 
 SNAPSHOT_PATH = "snapshot.npz"
 
 
-def save_snapshot(pop, food, tick, history, hall_fame):
+def save_snapshot(pop, food, vents, tick, history, hall_fame):
     hist_arr = np.array(history, dtype=np.float32) if history else np.empty((0, 7), dtype=np.float32)
     np.savez_compressed(SNAPSHOT_PATH,
         x=pop['x'], y=pop['y'], angle=pop['angle'], energy=pop['energy'],
         W_body=pop['W_body'], W1=pop['W1'], W2=pop['W2'],
         h_state=pop['h_state'],
         generation=pop['generation'], age=pop['age'], eaten=pop['eaten'],
-        food=food, tick=np.array([tick], dtype=np.int32),
+        food=food, vents=vents, tick=np.array([tick], dtype=np.int32),
         hist=hist_arr)
     print(f"[saved] {len(pop['x'])} organisms → {SNAPSHOT_PATH}  (tick {tick})")
 
 
 def load_snapshot(rng):
     if not os.path.exists(SNAPSHOT_PATH):
-        return None, None, 0, [], []
+        return None, None, None, 0, [], []
     d      = np.load(SNAPSHOT_PATH, allow_pickle=True)
     W_body = d['W_body'].astype(np.float32)
     t      = decode(W_body)
@@ -40,6 +41,7 @@ def load_snapshot(rng):
         'h_state':    (d['h_state'].astype(np.float32) if 'h_state' in d
                        else np.zeros((len(d['x']), N_HIDDEN), dtype=np.float32)),
     }
+    vents   = d['vents'].astype(np.float32) if 'vents' in d else make_vents()
     history = [tuple(row) for row in d['hist']] if d['hist'].ndim == 2 and len(d['hist']) else []
     print(f"[loaded] {len(pop['x'])} organisms ← {SNAPSHOT_PATH}  (tick {int(d['tick'][0])})")
-    return pop, d['food'], int(d['tick'][0]), history, []
+    return pop, d['food'], vents, int(d['tick'][0]), history, []

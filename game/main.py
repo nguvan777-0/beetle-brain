@@ -29,12 +29,12 @@ def main():
 
     rng = np.random.default_rng()
 
-    pop, food, tick, history, hall_fame = load_snapshot(rng)
+    pop, food, vents, tick, history, hall_fame = load_snapshot(rng)
     if pop is None:
-        pop, food = new_world(rng)
-        tick      = 0
-        history   = []
-        hall_fame = []
+        pop, food, vents = new_world(rng)
+        tick             = 0
+        history          = []
+        hall_fame        = []
 
     sel_idx       = None
     sim_speed_idx = 0
@@ -51,7 +51,7 @@ def main():
                 btn_rect = pygame.Rect(TOTAL_W // 2 - 80, sim.HEIGHT // 2 + 50, 160, 40)
                 if (event.type == pygame.KEYDOWN and event.key == pygame.K_r) or \
                    (event.type == pygame.MOUSEBUTTONDOWN and btn_rect.collidepoint(event.pos)):
-                    pop, food = new_world(rng)
+                    pop, food, vents = new_world(rng)
                     tick = 0; history = []; hall_fame = []; sel_idx = None
             continue
 
@@ -62,11 +62,11 @@ def main():
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_s:
-                save_snapshot(pop, food, tick, history, hall_fame)
+                save_snapshot(pop, food, vents, tick, history, hall_fame)
             if event.type == pygame.KEYDOWN and event.key == pygame.K_l:
                 result = load_snapshot(rng)
                 if result[0] is not None:
-                    pop, food, tick, history, hall_fame = result
+                    pop, food, vents, tick, history, hall_fame = result
                     sel_idx = None
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = pygame.mouse.get_pos()
@@ -80,7 +80,7 @@ def main():
         # ── tick ─────────────────────────────────────────────────────────────
         steps = SPEED_STEPS[sim_speed_idx] or 80
         for _ in range(steps):
-            pop, food = sim_tick(pop, food, rng)
+            pop, food = sim_tick(pop, food, vents, rng)
             tick += 1
             if len(pop['x']) == 0:
                 break
@@ -119,7 +119,7 @@ def main():
             continue
 
         surf.fill((10, 10, 18))
-        draw_food(surf, food)
+        draw_food(surf, food, vents)
 
         if sel_idx is not None and sel_idx < len(pop['x']):
             draw_rays(surf, pop['x'][sel_idx], pop['y'][sel_idx],
