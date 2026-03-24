@@ -12,11 +12,15 @@ def make_vents(seed=None):
     return rng.uniform([m, m], [WIDTH - m, HEIGHT - m], size=(n, 2)).astype(np.float32)
 
 
+_R_MIN = 2.0  # avoid singularity at centre
+
+
 def spawn_near_vents(n, vents, rng):
-    """Spawn n food items distributed uniformly within vent radii."""
+    """Spawn n food items with 1/r² density — dense at centre, sparse at edge."""
     chosen = rng.integers(0, len(vents), size=n)
     angles = rng.uniform(0, 2 * np.pi, size=n)
-    radii  = np.sqrt(rng.uniform(0, 1, size=n)) * VENT_RADIUS
+    # log-uniform radius → density ∝ 1/r²
+    radii  = _R_MIN * (VENT_RADIUS / _R_MIN) ** rng.uniform(0, 1, size=n)
     x = (vents[chosen, 0] + np.cos(angles) * radii) % WIDTH
     y = (vents[chosen, 1] + np.sin(angles) * radii) % HEIGHT
     return np.stack([x, y], axis=1).astype(np.float32)
@@ -34,11 +38,7 @@ def refill_vents(food, vents, rng, per_vent_cap):
             near = 0
         short = per_vent_cap - near
         if short > 0:
-            angles = rng.uniform(0, 2 * np.pi, size=short)
-            radii  = np.sqrt(rng.uniform(0, 1, size=short)) * VENT_RADIUS
-            xs = (v[0] + np.cos(angles) * radii) % WIDTH
-            ys = (v[1] + np.sin(angles) * radii) % HEIGHT
-            new_chunks.append(np.stack([xs, ys], axis=1).astype(np.float32))
+            new_chunks.append(spawn_near_vents(short, v[None, :], rng))
     if new_chunks:
         new_f = np.vstack(new_chunks)
         food  = np.vstack([food, new_f]) if len(food) else new_f
