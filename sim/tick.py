@@ -6,7 +6,7 @@ from sim.config import (
     AGING_ENABLED,
     SIZE_TAX, SPEED_TAX, AGE_TAX,
 )
-from sim.vents import spawn_near_vents
+from sim.vents import refill_vents
 from sim.grid.painter import paint_grid
 from sim.sensing import sense
 from sim.predation import predation
@@ -84,10 +84,7 @@ def tick(pop, food, vents, rng):
     else:
         pop = filter_pop(pop, alive)
 
-    # ── respawn food at vents ─────────────────────────────────────────────────
-    short = N_FOOD - len(food)
-    if short > 0:
-        new_f = spawn_near_vents(short, vents, rng)
-        food  = np.vstack([food, new_f]) if len(food) else new_f
+    # ── refill each vent independently ───────────────────────────────────────
+    food = refill_vents(food, vents, rng, N_FOOD // len(vents))
 
     return pop, food
