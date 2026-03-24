@@ -529,37 +529,5 @@ def _hof_html(hof):
     return f'<div class="hof">{"".join(cards)}</div>' if cards else ''
 
 
-def _lineage_legend_html(stats):
-    if not stats._lineage_hues:
-        return ''
-    # show top 12 lineages by total count
-    totals = {uid: sum(c for _, c in series) for uid, series in stats._lineage_series.items()}
-    top    = sorted(totals, key=lambda u: -totals[u])[:12]
-    items  = []
-    for uid in top:
-        hue = stats._lineage_hues.get(uid, 0.0)
-        css = _hue_to_rgb_css(hue)
-        items.append(
-            f'<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:0.75em;color:#8b949e">'
-            f'<span style="width:12px;height:12px;border-radius:3px;background:{css};display:inline-block"></span>'
-            f'lineage {uid} ({totals[uid]})</span>'
-        )
-    return ''.join(items)
-
-
 if __name__ == '__main__':
-    import numpy as np
-    from game.snapshot import load_snapshot
-    from sim.stats import StatsCollector
-
-    rng   = np.random.default_rng()
-    world, tick, history, hall_fame = load_snapshot(rng)
-    if world is None:
-        print("no snapshot found")
-    else:
-        stats = StatsCollector()
-        pop   = world['pop']
-        if len(pop['x']) > 0:
-            stats.record(int(tick), pop, world['phylo'])
-        stats.finalize(int(tick), 0.0, pop, world['phylo'])
-        generate(stats)
+    print("report is generated at end of each run — use run_headless.py or the pygame sim")
