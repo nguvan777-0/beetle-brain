@@ -138,7 +138,7 @@ def _anc_to_color(ancestor_id: int) -> tuple:
     return (int(r * 255), int(g * 255), int(b * 255))
 
 
-def _draw_pca_scatter(surf, pop, rect):
+def _draw_pca_scatter(surf, pop, rect, phylo_state):
     """Project W_body onto top 2 PCs; colour each dot by phylogenetic sub-lineage.
 
     Uses phylo.ancestor_at(individual_id, _PHYLO_DEPTH) so wights that share
@@ -165,9 +165,8 @@ def _draw_pca_scatter(surf, pop, rect):
     xs  = rx + 4 + ((proj[:, 0] - lo[0]) / span[0] * (rw - 8)).astype(int)
     ys  = ry + 4 + ((proj[:, 1] - lo[1]) / span[1] * (rh - 8)).astype(int)
 
-    # colour by ancestor depth generations back — scales with current max gen
     depth                  = max(4, int(pop['generation'].max()) // 3)
-    ancestors              = phylo.ancestor_at(pop['individual_id'], depth)
+    ancestors              = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
     unique_anc, inv        = np.unique(ancestors, return_inverse=True)
     color_map              = [_anc_to_color(int(a)) for a in unique_anc]
 
@@ -208,7 +207,7 @@ def _draw_stacked_area(surf, lineage_history, rect):
 
 
 def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
-               history, lineage_history, hall_fame, sim_speed=1, vents=None):
+               history, lineage_history, hall_fame, sim_speed=1, vents=None, phylo_state=None):
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
@@ -269,7 +268,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
         # ── PCA scatter ──────────────────────────────────────────────────────
         txt("STRATEGY SPACE  (W_body PCA)", font, (160, 180, 220))
-        _draw_pca_scatter(surf, pop, (px + 8, y, PANEL_W - 16, 130))
+        _draw_pca_scatter(surf, pop, (px + 8, y, PANEL_W - 16, 130), phylo_state)
         y += 134
         sep()
 

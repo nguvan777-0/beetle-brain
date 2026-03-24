@@ -31,12 +31,15 @@ def main():
 
     rng = np.random.default_rng()
 
-    pop, food, vents, tick, history, hall_fame = load_snapshot(rng)
-    if pop is None:
-        pop, food, vents = new_world(rng)
-        tick             = 0
-        history          = []
-        hall_fame        = []
+    world, tick, history, hall_fame = load_snapshot(rng)
+    if world is None:
+        world    = new_world(rng)
+        tick     = 0
+        history  = []
+        hall_fame = []
+    pop   = world['pop']
+    food  = world['food']
+    vents = world['vents']
     lineage_history = []
     last_pop        = pop
 
@@ -50,7 +53,8 @@ def main():
             surf.fill((10, 10, 18))
             draw_food(surf, food, vents)
             draw_panel(surf, font, font_sm, font_lg, tick, last_pop, sel_idx,
-                       history, lineage_history, hall_fame, 0, vents=vents)
+                       history, lineage_history, hall_fame, 0, vents=vents,
+                       phylo_state=world['phylo'])
             _draw_extinction_overlay(surf, font, font_lg, tick)
             pygame.display.flip()
             clock.tick(FPS)
@@ -62,7 +66,8 @@ def main():
                 btn_rect = pygame.Rect(sim.WIDTH // 2 - 80, sim.HEIGHT // 2 + 50, 160, 40)
                 if (event.type == pygame.KEYDOWN and event.key == pygame.K_r) or \
                    (event.type == pygame.MOUSEBUTTONDOWN and btn_rect.collidepoint(event.pos)):
-                    pop, food, vents = new_world(rng)
+                    world = new_world(rng)
+                    pop = world['pop']; food = world['food']; vents = world['vents']
                     tick = 0; history = []; hall_fame = []; lineage_history = []; sel_idx = None
             continue
 
@@ -73,11 +78,12 @@ def main():
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_s:
-                save_snapshot(pop, food, vents, tick, history, hall_fame)
+                save_snapshot(world, tick, history, hall_fame)
             if event.type == pygame.KEYDOWN and event.key == pygame.K_l:
                 result = load_snapshot(rng)
                 if result[0] is not None:
-                    pop, food, vents, tick, history, hall_fame = result
+                    world, tick, history, hall_fame = result
+                    pop = world['pop']; food = world['food']; vents = world['vents']
                     sel_idx = None
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = pygame.mouse.get_pos()
@@ -88,7 +94,8 @@ def main():
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 sim_speed_idx = (sim_speed_idx + 1) % len(SPEED_STEPS)
             if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
-                pop, food, vents = new_world(rng)
+                world = new_world(rng)
+                pop = world['pop']; food = world['food']; vents = world['vents']
                 tick = 0; history = []; hall_fame = []; lineage_history = []; sel_idx = None
 
         # ── tick ─────────────────────────────────────────────────────────────
@@ -96,7 +103,8 @@ def main():
         for _ in range(steps):
             if len(pop['x']) > 0:
                 last_pop = pop
-            pop, food = sim_tick(pop, food, vents, rng)
+            world = sim_tick(world, rng)
+            pop = world['pop']; food = world['food']; vents = world['vents']
             tick += 1
             if len(pop['x']) == 0:
                 break
@@ -112,7 +120,7 @@ def main():
                     float(pop['mutation_rate'].mean()),
                 ))
                 depth = max(4, int(pop['generation'].max()) // 3)
-                anc = phylo.ancestor_at(pop['individual_id'], depth)
+                anc = phylo.ancestor_at(pop['individual_id'], depth, world['phylo'])
                 u, c = np.unique(anc, return_counts=True)
                 lineage_history.append(dict(zip(u.tolist(), c.tolist())))
                 if len(lineage_history) > HIST_MAX:
@@ -150,7 +158,7 @@ def main():
 
         if len(pop['x']) > 0:
             depth       = max(4, int(pop['generation'].max()) // 3)
-            anc_ids     = phylo.ancestor_at(pop['individual_id'], depth)
+            anc_ids     = phylo.ancestor_at(pop['individual_id'], depth, world['phylo'])
             halo_colors = [_anc_to_color(int(a)) for a in anc_ids]
             for i in range(len(pop['x'])):
                 draw_organism(surf, pop['x'][i], pop['y'][i], pop['angle'][i],
@@ -164,7 +172,7 @@ def main():
 
         draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                    history, lineage_history, hall_fame, SPEED_STEPS[sim_speed_idx],
-                   vents=vents)
+                   vents=vents, phylo_state=world['phylo'])
 
         pygame.display.flip()
         clock.tick(FPS)
