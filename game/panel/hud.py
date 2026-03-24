@@ -1,7 +1,7 @@
 """Main stats panel drawn on the right side of the screen."""
 import numpy as np
 import pygame
-from sim.config import SPEED_MAX, SIZE_MAX, DRAIN_MAX
+from sim.config import SPEED_MAX, SIZE_MAX, MUTATION_RATE_MAX, DRAIN_SCALE
 from sim.population.genome import N_BODY
 from game.panel.sparkline import draw_sparkline
 
@@ -44,10 +44,10 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         txt("TRAIT TRENDS  (pop avg)", font, (160, 180, 220))
         if len(history) > 1:
             for label, col_idx, color, lo, hi in [
-                ("speed",  3, (100, 200, 255), 0, SPEED_MAX),
-                ("fov °",  4, (200, 160, 255), 0, 180),
-                ("size",   5, (255, 180, 100), 0, SIZE_MAX),
-                ("drain",  6, (255, 100, 100), 0, DRAIN_MAX),
+                ("speed",    3, (100, 200, 255), 0,    SPEED_MAX),
+                ("fov °",    4, (200, 160, 255), 0,    180),
+                ("size",     5, (255, 180, 100), 0,    SIZE_MAX),
+                ("mut rate", 6, (255, 100, 100), 0,    MUTATION_RATE_MAX),
             ]:
                 data = [h[col_idx] for h in history]
                 if label == "fov °":
@@ -78,7 +78,8 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
             f"  fov    {np.degrees(pop['fov'][sel_idx]):.0f}°",
             f"  ray    {pop['ray_len'][sel_idx]:.0f}",
             f"  size   {pop['size'][sel_idx]:.1f}",
-            f"  drain  {pop['drain'][sel_idx]:.3f}",
+            f"  drain  {DRAIN_SCALE * pop['size'][sel_idx]**0.75:.3f}  (size-derived)",
+            f"  mut    {pop['mutation_rate'][sel_idx]:.2f}",
         ]:
             txt(row, font_sm, (200, 200, 120))
         sep()
@@ -88,7 +89,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         bar_x = px + 10
         bar_y = y
         for j, (lbl, w_val) in enumerate(zip(
-            ["spd", "fov", "ray", "sz", "drn", "r", "g", "b", "trn"],
+            ["spd", "fov", "ray", "sz", "r", "g", "b", "trn", "brd"],
             pop['W_body'][sel_idx],
         )):
             h_bar     = int(abs(float(w_val)) * 12)
