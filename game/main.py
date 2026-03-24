@@ -4,7 +4,7 @@ import numpy as np
 import pygame
 
 import sim
-from sim import new_world, tick as sim_tick, init_ane
+from sim import new_world, tick as sim_tick, init_ane, DRAIN_SCALE
 from game.renderer import draw_organism, draw_rays, draw_food
 from game.panel import draw_panel, PANEL_W
 from game.snapshot import save_snapshot, load_snapshot
@@ -97,7 +97,7 @@ def main():
                 float(pop['speed'].mean()),
                 float(pop['fov'].mean()),
                 float(pop['size'].mean()),
-                float(pop['drain'].mean()),
+                float(pop['mutation_rate'].mean()),
             ))
             if len(history) > HIST_MAX:
                 history.pop(0)
@@ -107,7 +107,7 @@ def main():
                     int(pop['eaten'][i]), int(pop['generation'][i]),
                     int(pop['age'][i]),
                     float(pop['speed'][i]), float(pop['fov'][i]),
-                    float(pop['size'][i]),  float(pop['drain'][i]),
+                    float(pop['size'][i]),  float(DRAIN_SCALE * pop['size'][i]**0.75),
                     int(pop['r'][i]), int(pop['g'][i]), int(pop['b'][i]),
                 ))
             hall_fame.sort(key=lambda x: -x[0])
