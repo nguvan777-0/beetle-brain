@@ -1,5 +1,6 @@
 """Pygame event loop — the only place that knows about the screen."""
 import sys
+import time
 import numpy as np
 import pygame
 
@@ -44,9 +45,10 @@ def main():
     vents = world['vents']
     lineage_history = []
     last_pop        = pop
-    stats           = StatsCollector()
-    next_sample     = SAMPLE_EVERY
-    t_world_start   = time.time()
+    stats               = StatsCollector()
+    next_sample         = SAMPLE_EVERY
+    t_world_start       = time.time()
+    extinction_reported = False
 
     sel_idx       = None
     sim_speed_idx = 0
@@ -54,9 +56,9 @@ def main():
     while True:
         # ── game over ────────────────────────────────────────────────────────
         if len(pop['x']) == 0:
-            if stats.samples:  # only report once per extinction
+            if not extinction_reported:
                 _exit_with_report(stats, tick, world, t_world_start, extinct=True)
-            stats = StatsCollector(); next_sample = SAMPLE_EVERY; t_world_start = time.time()
+                extinction_reported = True
             # redraw last known world state so panel stays readable
             surf.fill((10, 10, 18))
             draw_food(surf, food, vents)
@@ -77,6 +79,8 @@ def main():
                     world = new_world(rng)
                     pop = world['pop']; food = world['food']; vents = world['vents']
                     tick = 0; history = []; hall_fame = []; lineage_history = []; sel_idx = None
+                    stats = StatsCollector(); next_sample = SAMPLE_EVERY
+                    t_world_start = time.time(); extinction_reported = False
             continue
 
         # ── events ───────────────────────────────────────────────────────────
@@ -107,7 +111,8 @@ def main():
                 world = new_world(rng)
                 pop = world['pop']; food = world['food']; vents = world['vents']
                 tick = 0; history = []; hall_fame = []; lineage_history = []; sel_idx = None
-                stats = StatsCollector(); next_sample = SAMPLE_EVERY; t_world_start = time.time()
+                stats = StatsCollector(); next_sample = SAMPLE_EVERY
+                t_world_start = time.time(); extinction_reported = False
 
         # ── tick ─────────────────────────────────────────────────────────────
         steps = SPEED_STEPS[sim_speed_idx] or 80
