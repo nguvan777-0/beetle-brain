@@ -3,15 +3,15 @@
 # inspired by the eyes of the Cambrian
 
 [world]
-width          = 900
-height         = 900
+width          = 700
+height         = 700
 food_count     = 200
 max_pop        = 4096
 n_start        = 12         # primordial soup
 seed           = 42         # world seed — same seed → same vent layout
 vent_count_min = 3
 vent_count_max = 5
-vent_radius    = 80.0       # food spawns within this radius of a vent (px)
+vent_radius    = 65.0       # food spawns within this radius of a vent (px)
 
 [energy]
 start       = 120.0
