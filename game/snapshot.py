@@ -4,6 +4,7 @@ import numpy as np
 from sim.config import N_HIDDEN
 from sim.population.genome import decode
 from sim.vents import make_vents
+from sim import phylo
 
 SNAPSHOT_PATH = "snapshot.npz"
 
@@ -16,6 +17,7 @@ def save_snapshot(pop, food, vents, tick, history, hall_fame):
         h_state=pop['h_state'],
         generation=pop['generation'], age=pop['age'], eaten=pop['eaten'],
         lineage_id=pop['lineage_id'],
+        individual_id=pop['individual_id'],
         food=food, vents=vents, tick=np.array([tick], dtype=np.int32),
         hist=hist_arr)
     print(f"[saved] {len(pop['x'])} organisms → {SNAPSHOT_PATH}  (tick {tick})")
@@ -41,9 +43,12 @@ def load_snapshot(rng):
         'eaten':       d['eaten'].astype(np.int32),
         'h_state':     (d['h_state'].astype(np.float32) if 'h_state' in d
                         else np.zeros((len(d['x']), N_HIDDEN), dtype=np.float32)),
-        'lineage_id':  (d['lineage_id'].astype(np.int32) if 'lineage_id' in d
-                        else np.zeros(len(d['x']), dtype=np.int32)),
+        'lineage_id':    (d['lineage_id'].astype(np.int32) if 'lineage_id' in d
+                          else np.zeros(len(d['x']), dtype=np.int32)),
+        'individual_id': (d['individual_id'].astype(np.int32) if 'individual_id' in d
+                          else np.arange(len(d['x']), dtype=np.int32)),
     }
+    phylo.init_from_snapshot(pop['individual_id'])
     vents   = d['vents'].astype(np.float32) if 'vents' in d else make_vents()
     history = [tuple(row) for row in d['hist']] if d['hist'].ndim == 2 and len(d['hist']) else []
     print(f"[loaded] {len(pop['x'])} organisms ← {SNAPSHOT_PATH}  (tick {int(d['tick'][0])})")

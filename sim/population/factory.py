@@ -3,6 +3,7 @@ import numpy as np
 from sim.config import N_FOOD, N_START, N_INPUTS, N_HIDDEN, N_OUTPUTS, ENERGY_START, WIDTH, HEIGHT
 from sim.population.genome import decode, N_BODY
 from sim.vents import make_vents, spawn_near_vents, refill_vents
+from sim import phylo
 
 
 def make_pop(n, rng):
@@ -17,11 +18,12 @@ def make_pop(n, rng):
         'energy':        np.full(n, ENERGY_START, dtype=np.float32),
         'W_body': W_body, 'W1': W1, 'W2': W2,
         **t,
-        'generation':  np.zeros(n, dtype=np.int32),
-        'age':         np.zeros(n, dtype=np.int32),
-        'eaten':       np.zeros(n, dtype=np.int32),
-        'h_state':     np.zeros((n, N_HIDDEN), dtype=np.float32),
-        'lineage_id':  np.arange(n, dtype=np.int32),
+        'generation':    np.zeros(n, dtype=np.int32),
+        'age':           np.zeros(n, dtype=np.int32),
+        'eaten':         np.zeros(n, dtype=np.int32),
+        'h_state':       np.zeros((n, N_HIDDEN), dtype=np.float32),
+        'lineage_id':    np.arange(n, dtype=np.int32),
+        'individual_id': phylo.init(n),
     }
 
 
