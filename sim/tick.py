@@ -3,7 +3,7 @@ import numpy as np
 from sim.config import (
     WIDTH, HEIGHT, N_FOOD, MAX_POP,
     ENERGY_FOOD,
-    DRAIN_SCALE, SIZE_TAX, SPEED_TAX, AGE_TAX,
+    ENERGY_MAX_SCALE, DRAIN_SCALE, SIZE_TAX, SPEED_TAX, AGE_TAX,
 )
 from sim.vents import refill_vents
 from sim.grid.painter import paint_grid
@@ -16,7 +16,7 @@ from brain.coreml_brain import run_brain
 
 
 def tick(pop, food, vents, rng):
-    energy_max = pop['energy_max']   # per-wight max energy storage
+    energy_max = ENERGY_MAX_SCALE * pop['size'] ** 2   # storage ∝ volume
 
     # ── sense ────────────────────────────────────────────────────────────────
     grid, idx_grid = paint_grid(pop, food)
@@ -26,7 +26,7 @@ def tick(pop, food, vents, rng):
     h_new, out     = run_brain(inputs, pop['W1'], pop['W2'], pop['h_state'])
     pop['h_state'] = h_new
     turns  = out[:, 0] * pop['turn_s']
-    speeds = (out[:, 1] + 1.0) * pop['speed_scale'] * pop['speed']
+    speeds = (out[:, 1] + 1.0) * pop['speed']
 
     # ── move ─────────────────────────────────────────────────────────────────
     pop['angle'] += turns

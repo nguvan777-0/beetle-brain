@@ -8,12 +8,10 @@ from sim.config import (
     EPIGENETIC_MIN, EPIGENETIC_MAX,
     WEIGHT_DECAY_MIN, WEIGHT_DECAY_MAX,
     MOUTH_MIN, MOUTH_MAX,
-    ENERGY_MAX_MIN, ENERGY_MAX_MAX,
     PRED_RATIO_MIN, PRED_RATIO_MAX,
-    SPEED_SCALE_MIN, SPEED_SCALE_MAX,
 )
 
-N_BODY = 18  # number of body genome weights
+N_BODY = 16  # number of body genome weights
 
 
 def sig(x):
@@ -36,9 +34,7 @@ def decode(W_body):
         'epigenetic':    (EPIGENETIC_MIN    + s[:, 12] * (EPIGENETIC_MAX    - EPIGENETIC_MIN)).astype(np.float32),
         'weight_decay':  (WEIGHT_DECAY_MIN  + s[:, 13] * (WEIGHT_DECAY_MAX  - WEIGHT_DECAY_MIN)).astype(np.float32),
         'mouth':         (MOUTH_MIN         + s[:, 14] * (MOUTH_MAX         - MOUTH_MIN)).astype(np.float32),
-        'energy_max':    (ENERGY_MAX_MIN    + s[:, 15] * (ENERGY_MAX_MAX    - ENERGY_MAX_MIN)).astype(np.float32),
-        'pred_ratio':    (PRED_RATIO_MIN    + s[:, 16] * (PRED_RATIO_MAX    - PRED_RATIO_MIN)).astype(np.float32),
-        'speed_scale':   (SPEED_SCALE_MIN   + s[:, 17] * (SPEED_SCALE_MAX   - SPEED_SCALE_MIN)).astype(np.float32),
+        'pred_ratio':    (PRED_RATIO_MIN    + s[:, 15] * (PRED_RATIO_MAX    - PRED_RATIO_MIN)).astype(np.float32),
         'r':             (40 + s[:, 4] * 215).astype(np.int32),
         'g':             (40 + s[:, 5] * 215).astype(np.int32),
         'b':             (40 + s[:, 6] * 215).astype(np.int32),
