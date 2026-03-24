@@ -1,6 +1,10 @@
 """Main stats panel drawn on the right side of the screen."""
+import colorsys
 import numpy as np
 import pygame
+from sim import phylo
+
+_PHYLO_DEPTH = 15   # generations to walk back when coloring PCA dots
 from sim.config import (
     SPEED_MIN, SPEED_MAX, FOV_MIN, FOV_MAX, RAY_MIN, RAY_MAX,
     SIZE_MIN, SIZE_MAX, MUTATION_RATE_MIN, MUTATION_RATE_MAX,
@@ -128,8 +132,20 @@ def _draw_trait_heatmap(surf, pop, rect, font_sm):
         surf.blit(font_sm.render(name, True, (120, 130, 150)), (rx, ty))
 
 
+def _anc_to_color(ancestor_id: int) -> tuple:
+    """Golden-ratio hue hash → RGB.  Deterministic, well-distributed."""
+    hue = (int(ancestor_id) * 0.618033988749895) % 1.0
+    r, g, b = colorsys.hsv_to_rgb(hue, 0.85, 0.9)
+    return (int(r * 255), int(g * 255), int(b * 255))
+
+
 def _draw_pca_scatter(surf, pop, rect):
-    """Project W_body onto top 2 PCs, plot each wight coloured by lineage."""
+    """Project W_body onto top 2 PCs; colour each dot by phylogenetic sub-lineage.
+
+    Uses phylo.ancestor_at(individual_id, _PHYLO_DEPTH) so wights that share
+    a recent common ancestor get the same hue — diverging sub-populations
+    naturally get different colours without any threshold decision.
+    """
     if len(pop['x']) < 3:
         return
     rx, ry, rw, rh = rect
@@ -138,7 +154,6 @@ def _draw_pca_scatter(surf, pop, rect):
 
     W = pop['W_body'].astype(np.float32)
     W -= W.mean(axis=0)
-    # SVD — columns of Vt are principal components
     try:
         _, _, Vt = np.linalg.svd(W, full_matrices=False)
     except np.linalg.LinAlgError:
@@ -147,14 +162,17 @@ def _draw_pca_scatter(surf, pop, rect):
 
     lo  = proj.min(axis=0)
     hi  = proj.max(axis=0)
-    rng = (hi - lo).clip(min=1e-6)
-    xs  = rx + 4 + ((proj[:, 0] - lo[0]) / rng[0] * (rw - 8)).astype(int)
-    ys  = ry + 4 + ((proj[:, 1] - lo[1]) / rng[1] * (rh - 8)).astype(int)
+    span = (hi - lo).clip(min=1e-6)
+    xs  = rx + 4 + ((proj[:, 0] - lo[0]) / span[0] * (rw - 8)).astype(int)
+    ys  = ry + 4 + ((proj[:, 1] - lo[1]) / span[1] * (rh - 8)).astype(int)
+
+    # colour by ancestor _PHYLO_DEPTH generations back — build color lookup once
+    ancestors              = phylo.ancestor_at(pop['individual_id'], _PHYLO_DEPTH)
+    unique_anc, inv        = np.unique(ancestors, return_inverse=True)
+    color_map              = [_anc_to_color(int(a)) for a in unique_anc]
 
     for i in range(len(xs)):
-        lid   = int(pop['lineage_id'][i])
-        color = _LINEAGE_COLORS[lid % len(_LINEAGE_COLORS)]
-        pygame.draw.circle(surf, color, (int(xs[i]), int(ys[i])), 2)
+        pygame.draw.circle(surf, color_map[inv[i]], (int(xs[i]), int(ys[i])), 2)
 
 
 def _draw_stacked_area(surf, lineage_history, rect, n_lineages):
