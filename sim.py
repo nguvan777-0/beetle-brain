@@ -289,9 +289,8 @@ def tick(pop, food, rng):
     n_breed   = can_breed.sum()
     pop['energy'] = np.where(can_breed, ENERGY_CLONE, pop['energy'])
 
-    if n_breed > 0 and N < MAX_POP:
-        n_children = min(n_breed, MAX_POP - N)
-        parent_idx = np.where(can_breed)[0][:n_children]
+    if n_breed > 0:
+        parent_idx = np.where(can_breed)[0]
         children   = _clone_batch(pop, parent_idx, rng)
         pop        = _filter(pop, alive)
         pop        = _concat(pop, children)
