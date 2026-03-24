@@ -298,6 +298,8 @@ def main():
         for _ in range(steps_this_frame):
             pop, food = sim_tick(pop, food, rng)
             tick += 1
+            if len(pop['x']) == 0:
+                break
 
         # clamp selected index if population shrank
         if sel_idx is not None and sel_idx >= len(pop['x']):
