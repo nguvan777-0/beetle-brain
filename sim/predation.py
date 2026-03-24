@@ -35,7 +35,7 @@ def predation(pop, idx_grid):
     dist = np.sqrt(dx * dx + dy * dy)
 
     in_range = dist < (pop['size'][:, None] + detect_r[j_safe])
-    bigger   = pop['size'][:, None] > pop['size'][j_safe] * 1.25
+    bigger   = pop['size'][:, None] > pop['size'][j_safe] * pop['pred_ratio'][:, None]
     kills    = valid & in_range & bigger
 
     # split prey energy among all killers of the same prey
