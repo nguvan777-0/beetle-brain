@@ -57,6 +57,7 @@ DRAIN_SCALE     = _cfg["metabolism"]["drain_scale"]
 SIZE_TAX        = _cfg["metabolism"]["size_tax"]
 SPEED_TAX       = _cfg["metabolism"]["speed_tax"]
 AGE_TAX         = _cfg["metabolism"]["age_tax"]
+SENSING_TAX     = _cfg["metabolism"]["sensing_tax"]
 
 CAMO_ENABLED    = _cfg["camouflage"]["enabled"]
 CAMO_BONUS      = _cfg["camouflage"]["detect_bonus"]
