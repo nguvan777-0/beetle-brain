@@ -24,6 +24,31 @@ Every organism has a field of view encoded in its genome. It evolves alongside b
 - population cap at 300 forces selection pressure
 - size, speed, fov, ray length, drain, color, and the entire brain — all evolve together
 
+## Tuning the world
+
+Everything is in `config.toml`. Edit it, restart the sim.
+
+```toml
+[world]
+max_pop     = 300     # more pressure = faster evolution
+food_count  = 200     # scarce food selects harder
+
+[aging]
+enabled      = true
+weight_decay = 0.00002  # higher = faster aging, more turnover
+
+[evolution]
+mutation_rate  = 0.12   # how often a weight mutates
+mutation_scale = 0.15   # how much
+epigenetic     = 0.25   # fraction of parent memory inherited at birth
+
+[camouflage]
+enabled      = true
+detect_bonus = 9.0    # how much further bright prey can be hunted from
+```
+
+No Python required.
+
 ## Run
 
 ```bash
