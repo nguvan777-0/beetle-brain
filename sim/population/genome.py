@@ -9,9 +9,10 @@ from sim.config import (
     WEIGHT_DECAY_MIN, WEIGHT_DECAY_MAX,
     MOUTH_MIN, MOUTH_MAX,
     PRED_RATIO_MIN, PRED_RATIO_MAX,
+    HGT_EAT_MIN, HGT_EAT_MAX, HGT_CONTACT_MIN, HGT_CONTACT_MAX,
 )
 
-N_BODY = 16  # number of body genome weights
+N_BODY = 18  # number of body genome weights
 
 
 def sig(x):
@@ -35,6 +36,8 @@ def decode(W_body):
         'weight_decay':  (WEIGHT_DECAY_MIN  + s[:, 13] * (WEIGHT_DECAY_MAX  - WEIGHT_DECAY_MIN)).astype(np.float32),
         'mouth':         (MOUTH_MIN         + s[:, 14] * (MOUTH_MAX         - MOUTH_MIN)).astype(np.float32),
         'pred_ratio':    (PRED_RATIO_MIN    + s[:, 15] * (PRED_RATIO_MAX    - PRED_RATIO_MIN)).astype(np.float32),
+        'hgt_eat_rate':  (HGT_EAT_MIN      + s[:, 16] * (HGT_EAT_MAX      - HGT_EAT_MIN)).astype(np.float32),
+        'hgt_contact_rate': (HGT_CONTACT_MIN + s[:, 17] * (HGT_CONTACT_MAX - HGT_CONTACT_MIN)).astype(np.float32),
         'r':             (40 + s[:, 4] * 215).astype(np.int32),
         'g':             (40 + s[:, 5] * 215).astype(np.int32),
         'b':             (40 + s[:, 6] * 215).astype(np.int32),

@@ -14,6 +14,7 @@ from sim.config import (
     AGING_ENABLED,
     SIZE_TAX, SPEED_TAX, AGE_TAX,
     CAMO_ENABLED, CAMO_BONUS,
+    HGT_EAT_MIN, HGT_EAT_MAX, HGT_CONTACT_MIN, HGT_CONTACT_MAX,
 )
 from sim.population.genome import N_BODY
 from sim.population import decode, make_pop, new_world, filter_pop, concat_pop

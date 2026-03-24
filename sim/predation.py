@@ -47,4 +47,7 @@ def predation(pop, idx_grid):
     killed = np.zeros(N, dtype=bool)
     killed[j_idx[kills]] = True
 
-    return killed, prey_gain
+    pred_idx, slot_idx = np.where(kills)
+    prey_idx           = j_idx[pred_idx, slot_idx]
+
+    return killed, prey_gain, pred_idx, prey_idx
