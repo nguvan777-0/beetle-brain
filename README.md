@@ -1,14 +1,18 @@
 # beetle-brain
 
-Neuroevolution sim where the organism is its weights, accelerated via CoreML on Apple Silicon (numpy fallback included). We're evolving weights called wights.
+Neuroevolution sim where the organism is its weights, accelerated via CoreML on Apple Silicon (numpy fallback included). We're evolving weights called wights. Each wight's brain is a Recurrent Neural Network (RNN) — inherited at birth, mutated like the body, shaped entirely by selection.
+
+- **Encoded** (genome, evolved): speed, fov, size, color, mouth, pred_ratio, mutation rates, HGT rates, epigenetic carry-over — 18 floats decoded via sigmoid.
+- **Derived** (our rules, not evolved): `energy_max = 10 × size²` (storage ∝ volume), `drain = 0.015 × size^0.75` (Kleiber's law).
+- **Emergent**: predator/prey dimorphism, camouflage arms race, lineage divergence, horizontal gene flow — nothing encodes these, they appear.
 
 ![beetle-brain](https://github.com/nguvan777-0/beetle-brain/releases/download/screenshots/screenshot-v2.png)
 
-## What it is
+## the wight
 
-The organism is called a **wight**. Each wight is ~213 floats: 18 body weights, 180 for the first brain layer, 24 for the second. Size, speed, color, field of view, mouth, predation threshold, breeding strategy, mutation style, aging rate, HGT rates, and how it thinks — all decoded from the same array via sigmoid. Mutate the array, you get a child. Copy it, you get a clone. Free it, it dies.
+Each wight is ~213 floats: 18 body weights, 180 for the first brain layer, 24 for the second. All decoded from the same array via sigmoid. Starts with 12 wights (a primordial soup). Everything else emerges.
 
-Starts with 12 wights (a primordial soup). Everything else emerges.
+Wights ray-cast through a rasterized world grid — O(N) total regardless of population size. Sensing and predation both use the same grid: sensing ray-marches through it, predation reads a fixed patch around each wight. All brains run in a single batched CoreML call (weights passed as runtime inputs, routed to GPU or ANE by the OS).
 
 Wights ray-cast through a rasterized world grid — O(N) total regardless of population size. Sensing and predation both use the same grid: sensing ray-marches through it, predation reads a fixed patch around each wight. All brains run in a single batched CoreML call (weights passed as runtime inputs, routed to GPU or ANE by the OS).
 

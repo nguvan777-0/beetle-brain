@@ -1,17 +1,19 @@
 # long-run analysis — where wights end up
 
-You can't predict the exact path. Tiny mutations compound.
-But you can predict where the attractors are.
+This is not a simulation of evolution as a metaphor. It's evolution running. The same
+forces that shaped every living thing — selection, drift, mutation, horizontal gene
+transfer — are operating here, on a genome you can read, at a speed you can watch.
 
----
+The questions are real. Will sex emerge from HGT? Will predators evolve to eat their
+prey's adaptations wholesale? Will memory crystallize in the RNN after enough generations?
+Biology spent 4 billion years answering these. We get to watch them unfold in minutes.
 
-## why exact prediction is impossible
+You can't predict the exact path. Two populations that differ by one mutation bit
+diverge completely within a few thousand ticks — that's not a bug, it's the mechanism.
+Evolution is a random walk biased by selection.
 
-The simulation is chaotic. Two populations that differ by one mutation bit
-diverge completely within a few thousand ticks. This is not a fixable problem —
-it's the mechanism. Evolution is a random walk biased by selection.
-
-What you CAN predict: the stable states the walk converges to.
+But you can predict the attractors — the stable states the population gets pulled toward
+and stays in, like a ball rolling into a valley.
 
 ---
 
@@ -19,70 +21,62 @@ What you CAN predict: the stable states the walk converges to.
 
 An Evolutionarily Stable Strategy is a trait value no mutant can invade.
 
-**The predation rule:** size_predator > 1.25 × size_prey
+**The predation rule:** size_predator > pred_ratio × size_prey (pred_ratio ∈ [1.05, 2.0])
 
-This means: in a population where everyone has size s*, a mutant with
-size s > 1.25 × s* eats everyone and can't be eaten. A mutant with
-s < s*/1.25 gets eaten by everyone.
+In a monomorphic population at size s*, a mutant with size > pred_ratio × s* eats everyone.
+A mutant with size < s*/pred_ratio gets eaten by everyone.
 
-There is no direct cost to being large. Drain is independently encoded
-in W_body[:,4]. Size and drain are orthogonal weights.
+**Cost of being large:** drain = `0.015 × size^0.75` (Kleiber). But energy capacity
+= `10 × size²`. Reserve time ∝ `size² / size^0.75 = size^1.25`. Larger wights have
+proportionally *more* energy buffer. There is no size cost that outweighs the predation
+advantage. **The ESS for size is SIZE_MAX = 9.0.** Corner solution.
 
-**Therefore the ESS for size is SIZE_MAX = 9.0.** It's a corner solution.
-The only thing that can stop it is frequency-dependent selection:
-if everyone is max size, no one can eat each other, and small food-eaters
-can survive. That's when you get stable size dimorphism — big predators
-coexisting with small food-eaters. Natural ecosystems exactly.
+The only brake is frequency-dependence: if everyone is max size, no one can eat each other,
+and small food-eaters survive. That's size dimorphism — large predators coexisting with
+small food-eaters. Natural ecosystems exactly.
 
-**Why run 001 shows 7.8, not 9.0:**
-
-The size weight w_s (W_body[:,3]) is pulled toward 0 by decay (δ = 0.00002)
-and jittered by mutation (rate 0.12, scale 0.15). At neutral weight (w=0),
-sigmoid(0) = 0.5, which maps to:
-
-```
-size_neutral = 3.0 + 0.5 × (9.0 - 3.0) = 6.0
-```
-
-The observed 7.8 corresponds to sigmoid⁻¹((7.8 - 3) / 6) = sigmoid⁻¹(0.8)
-= ln(4) ≈ 1.39. Selection hasn't finished pushing the weight up yet.
-7,891 ticks is early.
+**To force dimorphism:** reduce `food_count` below ~80. Below that, pure food-eating can't
+sustain a wight, predation becomes mandatory, runaway size selection collapses diversity.
+The default 100 is in the coexistence zone.
 
 ---
 
-## weight decay as an Ornstein-Uhlenbeck process
+## neutral genes and drift
 
-Each weight follows this dynamic each tick:
+`weight_decay` carries no selection pressure — aging is metabolic, not genetic.
+It drifts freely under mutation, unconstrained by fitness. Over long runs it distributes
+uniformly across its range.
 
-```
-w → w × (1 - δ)   +   mutation noise   +   selection gradient
-```
+This is useful. A neutral gene is a clock. If `weight_decay` is flat after 100k ticks
+but `mutation_rate` is sharply peaked, you're seeing selection in action on `mutation_rate`
+against a clean drift baseline. Real population genetics uses neutral markers exactly
+this way — microsatellites, synonymous substitutions. `weight_decay` is that here.
 
-Without selection, this is an OU process with stationary variance:
+---
 
-```
-D  = p_mut × σ_mut² / 2  =  0.12 × 0.15² / 2  =  0.00135 per tick
-σ² = D / δ               =  0.00135 / 0.00002  =  67.5
-σ  = 8.22
-```
+## ESS for HGT rates
 
-sigmoid(8.22) ≈ 0.9997. The mutation noise alone covers nearly the entire
-trait range. Decay is ~400× weaker than mutation at the scale of these weights.
+`hgt_eat_rate` and `hgt_contact_rate` are genome genes. Their ESS depends on genetic
+diversity in the population.
 
-**What this means:** weight decay barely constrains trait values. It keeps
-the population from becoming perfectly fixed (which would end evolution),
-but selection dominates the equilibrium position.
+**Cost:** crossover with a random genome is usually destructive. A well-adapted wight
+incorporating a stranger's W1/W2 likely breaks its foraging behavior. Cost is proportional
+to genetic distance from the donor.
 
-The weight decay half-life is:
+**Benefit:** HGT can spread beneficial mutations across lineage boundaries — faster than
+waiting for the same mutation to arise twice independently.
 
-```
-t½ = ln(2) / δ = 0.693 / 0.00002 = 34,650 ticks
-```
+In a genetically uniform population, HGT is pure noise. Both rates drift toward zero.
+In stable predator-prey dimorphism, prey evolve novel evasion strategies. Predators that
+incorporate prey genome via predation literally eat the prey's adaptations — Red Queen
+dynamics without parasites. The predation arms race has a metabolic shortcut.
 
-After ~35,000 ticks (≈ 2 minutes headless), the founding wight's original
-weights have decayed to half. After ~170,000 ticks, they're at ~3%.
-All genetic continuity with the first wight is gone well within an hour of
-headless runtime.
+Expected long-run: `hgt_eat_rate` stabilizes somewhere in [0.01, 0.05] for carnivores.
+`hgt_contact_rate` stays near the minimum unless dense clustering emerges around vents.
+
+**The proto-sex question:** sex is HGT with mate choice. If `hgt_contact_rate` evolves
+upward and wights cluster near genetically diverse populations to exchange genes, that's
+proto-conjugation. Whether it emerges here is the experiment.
 
 ---
 
@@ -91,112 +85,97 @@ headless runtime.
 There's a critical food density ρ* where food-eating outcompetes predation.
 Below ρ*, predation wins → size → 9. Above ρ*, food-eating wins → size shrinks.
 
-Rough estimate with current params (ray_len ≈ 90, fov ≈ 64° ≈ 1.12 rad,
-speed ≈ 2.4, drain ≈ 0.08):
+Rough estimate with current params (ray_len ≈ 90, fov ≈ 90° ≈ 1.57 rad, speed ≈ 2.2):
 
 ```
-area swept per tick ≈ ray_len × fov × speed  =  90 × 1.12 × 2.4  ≈  242 units
-food density  =  200 / (900 × 900)  ≈  0.000247 per unit²
-food/tick     ≈  242 × 0.000247  ≈  0.06 pellets
-energy/tick   ≈  0.06 × 55  -  0.08  ≈  +3.2 net
+area swept per tick ≈ ray_len × fov × speed  =  90 × 1.57 × 2.2  ≈  311 units
+food density  =  100 / (700 × 700)  ≈  0.000204 per unit²
+food/tick     ≈  311 × 0.000204  ≈  0.063 pellets
+energy/tick   ≈  0.063 × 4  -  0.06  ≈  +0.19 net
 ```
 
-Food-eating alone is viable. This is why color could eventually diverge —
-a small, fast, dim food-eater is a valid alternative strategy if the big
-predators aren't scanning the right areas.
-
-**To push the sim into size dimorphism:** reduce food_count below ~80.
-Below that threshold, pure food-eating can't sustain a wight at drain=0.08,
-and predation becomes mandatory. That creates runaway size selection, which
-collapses diversity. Above ~80, there's room for small wights. The current
-200 is well into the coexistence zone.
+Food-eating alone is barely viable. Current 100 food_count is close to the threshold —
+the coexistence zone is narrow. This is why color divergence is possible: a small, dim
+food-eater is a valid strategy if the big predators aren't scanning the right areas.
 
 ---
 
 ## FOV: where it's headed
 
-We observed: 73° → 64° in 7,891 ticks. It's narrowing.
+Narrow FOV tracks a known target better. Wide FOV catches peripheral movement.
 
-The ESS FOV depends on what the dominant energy source is. In a food-scarce
-world, wide FOV catches more — you need the peripheral scan. In a predator
-world, narrow FOV tracks prey more precisely — 7 rays concentrated forward
-beats 7 rays spread over 162°.
+As predation dominates energy intake, selection pushes toward narrower FOV — 7 rays
+concentrated forward beats 7 rays spread over 162° for tracking moving prey.
 
-As population density stays high (300 cap), predation is the primary food
-source for large wights. Selection pressure: narrower FOV → better prey
-tracking → more predation success.
+Expected long-term floor: **~35–50°**. Below that, prey moving at ~2 units/tick at
+~90 unit detection range crosses between adjacent rays faster than the wight can turn.
 
-Expected long-term floor: **~35–50°**. That's where a 7-ray system can
-usefully resolve a target moving at the speed observed (2.4 units/tick) at
-detection range (~90 units). Below that, the prey crosses between rays
-faster than the wight can turn.
+In a food-dominated world (high food_count), wide FOV wins. Watch it toggle.
 
 ---
 
 ## color: the most uncertain prediction
 
-Color is the hardest to predict long-term because it's a co-evolutionary
-arms race. Both the camouflage strategy and the detection strategy
-evolve simultaneously.
+Color is the hardest to predict long-term because it's a co-evolutionary arms race.
+Both the camouflage strategy and the detection strategy evolve simultaneously.
 
-Current pressure: bright wights (high r+g+b) have a larger predation
-detection radius (up to +9 units). This cuts both ways:
-- Bright predators find prey from further away (good for predators)
-- Bright prey are spotted from further away (bad for prey)
+Current pressure: bright wights (high r+g+b) have a larger predation detection radius
+(up to +9 units). This cuts both ways — bright predators find prey from further away,
+bright prey are spotted from further away.
 
 The stable states are:
 1. **Uniform dim** — everyone dark, detection radius collapses to size alone
-2. **Arms race to bright** — everyone bright, detection radius inflated for all,
-   net effect neutral but energetically wasteful
+2. **Arms race to bright** — everyone bright, detection symmetric, net effect neutral
 3. **Dimorphism** — dim prey that evade detection + bright predators that hunt
 
-Which one the sim lands in is path-dependent and unpredictable. It depends
-which mutation hits first in which lineage.
+Which one the sim lands in is path-dependent. It depends which mutation hits first
+in which lineage. Now that founders start at their lineage hue, the initial color
+distribution is a rainbow — which state it converges to from that start is the question.
 
 ---
 
 ## h_state: when does memory do something real?
 
-The recurrent hidden state (N_HIDDEN=12) persists across ticks and is
-partially inherited (25%). In run 001 it was nearly saturated (mean |h| = 0.70)
-but the population was only 7 generations deep.
+The recurrent hidden state (N_HIDDEN=12) persists across ticks and is partially
+inherited via `epigenetic` (∈ [0, 1]).
 
-For h_state to encode something interpretable (fear, hunger, momentum),
-the weights W1/W2 need to evolve to read and write it meaningfully.
-That requires selection pressure on behaviors that span multiple ticks —
-e.g., a wight that remembers which direction food was last found survives
-longer than one that doesn't.
+For h_state to encode something interpretable — hunger, momentum, fear — the weights
+W1/W2 need to evolve to read and write it meaningfully. That requires selection on
+behaviors that span multiple ticks: remembering which direction food was last found,
+persisting a pursuit trajectory.
 
-Rough estimate: this becomes visible at **gen 50–200**. Below that, h_state
-is mostly noise that evolution hasn't had time to sculpt.
+This is also where HGT is most interesting. Crossover at the W1/W2 boundary produces
+a wight with one wight's input encoding and another's output mapping. Most are incoherent.
+The rare coherent ones are cognitively novel.
 
-At current rates (~7 gen per 30s headless), gen 100 is ~7 minutes of runtime.
+Rough estimate: visible at **gen 50–200**. Below that, h_state is mutation noise.
+At ~600 ticks/sec headless, gen 100 is reachable in minutes.
 
 ---
 
 ## long-run prediction summary
 
-| trait       | current (run 001) | predicted long-run     | mechanism              |
-|-------------|-------------------|------------------------|------------------------|
-| size        | 7.8               | 8.5–9.0                | corner ESS, no cost    |
-| FOV         | 64°               | 35–50°                 | predator tracking      |
-| speed       | 2.4               | near current           | energy sweet spot      |
-| drain       | 0.08              | near current           | energy sweet spot      |
-| color       | neutral ~140      | unpredictable          | arms race              |
-| h_state     | active, unsculpted| meaningful at gen 100+ | selection on memory    |
-| dimorphism  | none              | possible if food > 80  | frequency-dependence   |
+| trait            | predicted long-run          | mechanism                        |
+|------------------|-----------------------------|----------------------------------|
+| size             | 8.5–9.0 (corner)            | reserve time ∝ size^1.25         |
+| FOV              | 35–50°                      | prey tracking at observed speed  |
+| speed            | near current                | quadratic energy cost sweet spot |
+| hgt_eat_rate     | 0.01–0.05 for carnivores    | Red Queen via predation          |
+| hgt_contact_rate | near min unless clustering  | weaker signal, noisy             |
+| weight_decay     | flat / neutral              | vestigial, no selection pressure |
+| color            | path-dependent              | arms race from rainbow start     |
+| h_state          | meaningful at gen 100+      | selection on multi-tick behavior |
 
 ---
 
 ## what "1 billion ticks" actually means
 
-At 263 ticks/sec headless, 1 billion ticks = ~44 days of runtime.
+At ~600 ticks/sec headless on Apple Silicon, 1 billion ticks = ~19 days of runtime.
 
-The founding wight's genome is irrelevant after ~170,000 ticks (11 minutes).
-By 1 billion ticks, the population has thermalized completely — the only
-surviving information is what selection kept. The weights will be distributed
-around the ESS attractors above, jittered by mutation, with variance set by
-the OU equilibrium.
+The founding genome is irrelevant after ~170,000 ticks (a few minutes). By 1 billion
+ticks, the population has thermalized — the only surviving information is what selection
+kept. Weights distribute around the ESS attractors above, jittered by mutation and
+shuffled by HGT.
 
 You can't predict which individual wight wins. You can predict the distribution
 they're drawn from.
