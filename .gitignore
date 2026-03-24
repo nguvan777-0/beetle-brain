@@ -8,3 +8,4 @@ venv/
 .venv/
 build/
 snapshot.npz
+report.html

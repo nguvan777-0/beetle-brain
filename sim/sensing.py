@@ -32,7 +32,7 @@ def sense(pop, grid):
     step_idx = np.arange(MAX_STEPS, dtype=np.int32)[None, None, :]
     org_hits = org_hits & (step_idx >= size_pix[:, None, None])
 
-    ray_len_pix = pop['ray_len'] * GRID_SCALE
+    ray_len_pix = np.maximum(pop['ray_len'] * GRID_SCALE, 1.0)   # blind wights get 0 signal, not NaN
 
     def _first_hit(hits):
         has_hit  = hits.any(axis=2)
