@@ -42,7 +42,7 @@ def predation(pop, idx_grid):
     prey_kill_counts = np.zeros(N, dtype=np.float32)
     np.add.at(prey_kill_counts, j_idx[kills], 1.0)
     counts_per_slot  = np.where(kills, prey_kill_counts[j_safe].clip(min=1), 1.0)
-    prey_gain = (kills * pop['energy'][j_safe] / counts_per_slot).sum(axis=1) * 0.7
+    prey_gain = (kills * pop['energy'][j_safe] / counts_per_slot).sum(axis=1) * 0.3
 
     killed = np.zeros(N, dtype=bool)
     killed[j_idx[kills]] = True
