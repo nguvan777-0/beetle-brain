@@ -134,13 +134,6 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     txt(f"tick {tick:,}   [{speed_label}]  SPACE=cycle", font_sm, speed_color)
     sep()
 
-    # ── vent territory minimap ────────────────────────────────────────────────
-    if vents is not None:
-        map_h = int((PANEL_W - 16) * HEIGHT / WIDTH)
-        _draw_vent_map(surf, pop, vents, (px + 8, y, PANEL_W - 16, map_h))
-        y += map_h + 4
-        sep()
-
     N = len(pop['x'])
     if N > 0:
         counts    = np.bincount(pop['lineage_id'], minlength=N_START)
