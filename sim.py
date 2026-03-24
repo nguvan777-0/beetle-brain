@@ -126,10 +126,12 @@ def _paint_grid(pop, food):
         fx = np.clip((food[:, 0] * GRID_SCALE).astype(np.int32), 0, GW - 1)
         grid[0, fy, fx] = 1
 
-    # paint organisms — encode size so predation can read it too
+    # paint organisms — encode brightness (r+g+b) so bright organisms are
+    # more detectable on other organisms' rays (camouflage pressure)
     oy = np.clip((pop['y'] * GRID_SCALE).astype(np.int32), 0, GH - 1)
     ox = np.clip((pop['x'] * GRID_SCALE).astype(np.int32), 0, GW - 1)
-    norm = ((pop['size'] - SIZE_MIN) / (SIZE_MAX - SIZE_MIN) * 254 + 1).astype(np.uint8)
+    brightness = ((pop['r'].astype(np.int32) + pop['g'].astype(np.int32) + pop['b'].astype(np.int32)) / 3).astype(np.int32)
+    norm = np.clip(brightness, 1, 255).astype(np.uint8)
     grid[1, oy, ox] = norm
 
     return grid
