@@ -36,6 +36,7 @@ def main():
         history          = []
         hall_fame        = []
     lineage_history = []
+    last_pop        = pop
 
     sel_idx       = None
     sim_speed_idx = 0
@@ -43,13 +44,20 @@ def main():
     while True:
         # ── game over ────────────────────────────────────────────────────────
         if len(pop['x']) == 0:
-            _draw_extinction(surf, font, font_lg, tick, clock, FPS)
+            # redraw last known world state so panel stays readable
+            surf.fill((10, 10, 18))
+            draw_food(surf, food, vents)
+            draw_panel(surf, font, font_sm, font_lg, tick, last_pop, sel_idx,
+                       history, lineage_history, hall_fame, 0, vents=vents)
+            _draw_extinction_overlay(surf, font, font_lg, tick)
+            pygame.display.flip()
+            clock.tick(FPS)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit(); sys.exit()
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     pygame.quit(); sys.exit()
-                btn_rect = pygame.Rect(TOTAL_W // 2 - 80, sim.HEIGHT // 2 + 50, 160, 40)
+                btn_rect = pygame.Rect(sim.WIDTH // 2 - 80, sim.HEIGHT // 2 + 50, 160, 40)
                 if (event.type == pygame.KEYDOWN and event.key == pygame.K_r) or \
                    (event.type == pygame.MOUSEBUTTONDOWN and btn_rect.collidepoint(event.pos)):
                     pop, food, vents = new_world(rng)
@@ -84,6 +92,8 @@ def main():
         # ── tick ─────────────────────────────────────────────────────────────
         steps = SPEED_STEPS[sim_speed_idx] or 80
         for _ in range(steps):
+            if len(pop['x']) > 0:
+                last_pop = pop
             pop, food = sim_tick(pop, food, vents, rng)
             tick += 1
             if len(pop['x']) == 0:
@@ -151,16 +161,17 @@ def main():
         clock.tick(FPS)
 
 
-def _draw_extinction(surf, font, font_lg, tick, clock, fps):
-    cx, cy = surf.get_width() // 2, surf.get_height() // 2
-    surf.fill((10, 10, 18))
-    label = font_lg.render("EXTINCTION", True, (200, 60, 60))
-    surf.blit(label, label.get_rect(center=(cx, cy - 40)))
-    sub = font.render(f"survived {tick:,} ticks", True, (160, 160, 180))
-    surf.blit(sub, sub.get_rect(center=(cx, cy + 10)))
-    btn_rect = pygame.Rect(cx - 80, cy + 50, 160, 40)
-    pygame.draw.rect(surf, (50, 120, 50), btn_rect, border_radius=6)
-    btn_lbl = font.render("R  restart", True, (220, 255, 220))
+def _draw_extinction_overlay(surf, font, font_lg, tick):
+    """Semi-transparent overlay on the sim area only — panel stays readable."""
+    cx, cy = sim.WIDTH // 2, sim.HEIGHT // 2
+    overlay = pygame.Surface((sim.WIDTH, sim.HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 160))
+    surf.blit(overlay, (0, 0))
+    label = font_lg.render("EXTINCTION", True, (220, 80, 80))
+    surf.blit(label, label.get_rect(center=(cx, cy - 30)))
+    sub = font.render(f"survived {tick:,} ticks", True, (180, 160, 160))
+    surf.blit(sub, sub.get_rect(center=(cx, cy + 4)))
+    btn_rect = pygame.Rect(cx - 80, cy + 36, 160, 34)
+    pygame.draw.rect(surf, (40, 100, 40), btn_rect, border_radius=5)
+    btn_lbl = font.render("R  restart", True, (200, 240, 200))
     surf.blit(btn_lbl, btn_lbl.get_rect(center=btn_rect.center))
-    pygame.display.flip()
-    clock.tick(fps)
