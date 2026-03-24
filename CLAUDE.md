@@ -9,6 +9,12 @@ Run the sim:
 uv run --with numpy --with coremltools python world.py
 ```
 
+## After cloning
+Run once to install the pre-commit smoke tests (headless + pygame):
+```
+bash scripts/install-hooks.sh
+```
+
 ## Commit messages
 Sign commits with model and version, no email:
 ```
