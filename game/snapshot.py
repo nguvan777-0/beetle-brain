@@ -22,29 +22,37 @@ def save_snapshot(pop, food, tick, history, hall_fame):
 def load_snapshot(rng):
     if not os.path.exists(SNAPSHOT_PATH):
         return None, None, 0, [], []
-    d     = np.load(SNAPSHOT_PATH, allow_pickle=True)
-    W_body = d['W_body']
-    speed, fov, ray, size, drain, turn_s, r, g, b = decode(W_body)
+    d      = np.load(SNAPSHOT_PATH, allow_pickle=True)
+    W_body = d['W_body'].astype(np.float32)
+    (speed, fov, ray, size, drain, turn_s, r, g, b,
+     breed_at, clone_with, mutation_rate, mutation_scale,
+     epigenetic, weight_decay) = decode(W_body)
     pop = {
-        'x':          d['x'].astype(np.float32),
-        'y':          d['y'].astype(np.float32),
-        'angle':      d['angle'].astype(np.float32),
-        'energy':     d['energy'].astype(np.float32),
-        'W_body':     W_body.astype(np.float32),
-        'W1':         d['W1'].astype(np.float32),
-        'W2':         d['W2'].astype(np.float32),
-        'speed':      speed.astype(np.float32),
-        'fov':        fov.astype(np.float32),
-        'ray_len':    ray.astype(np.float32),
-        'size':       size.astype(np.float32),
-        'drain':      drain.astype(np.float32),
-        'turn_s':     turn_s.astype(np.float32),
+        'x':             d['x'].astype(np.float32),
+        'y':             d['y'].astype(np.float32),
+        'angle':         d['angle'].astype(np.float32),
+        'energy':        d['energy'].astype(np.float32),
+        'W_body':        W_body,
+        'W1':            d['W1'].astype(np.float32),
+        'W2':            d['W2'].astype(np.float32),
+        'speed':         speed.astype(np.float32),
+        'fov':           fov.astype(np.float32),
+        'ray_len':       ray.astype(np.float32),
+        'size':          size.astype(np.float32),
+        'drain':         drain.astype(np.float32),
+        'turn_s':        turn_s.astype(np.float32),
+        'breed_at':      breed_at.astype(np.float32),
+        'clone_with':    clone_with.astype(np.float32),
+        'mutation_rate': mutation_rate.astype(np.float32),
+        'mutation_scale':mutation_scale.astype(np.float32),
+        'epigenetic':    epigenetic.astype(np.float32),
+        'weight_decay':  weight_decay.astype(np.float32),
         'r': r, 'g': g, 'b': b,
-        'generation': d['generation'].astype(np.int32),
-        'age':        d['age'].astype(np.int32),
-        'eaten':      d['eaten'].astype(np.int32),
-        'h_state':    (d['h_state'].astype(np.float32) if 'h_state' in d
-                       else np.zeros((len(d['x']), N_HIDDEN), dtype=np.float32)),
+        'generation':    d['generation'].astype(np.int32),
+        'age':           d['age'].astype(np.int32),
+        'eaten':         d['eaten'].astype(np.int32),
+        'h_state':       (d['h_state'].astype(np.float32) if 'h_state' in d
+                          else np.zeros((len(d['x']), N_HIDDEN), dtype=np.float32)),
     }
     history = [tuple(row) for row in d['hist']] if d['hist'].ndim == 2 and len(d['hist']) else []
     print(f"[loaded] {len(pop['x'])} organisms ← {SNAPSHOT_PATH}  (tick {int(d['tick'][0])})")
