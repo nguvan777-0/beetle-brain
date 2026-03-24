@@ -4,7 +4,7 @@ import numpy as np
 import pygame
 from sim import phylo
 
-_PHYLO_DEPTH = 15   # generations to walk back when coloring PCA dots
+_PHYLO_DEPTH = 50   # generations to walk back for sub-lineage coloring
 from sim.config import (
     SPEED_MIN, SPEED_MAX, FOV_MIN, FOV_MAX, RAY_MIN, RAY_MAX,
     SIZE_MIN, SIZE_MAX, MUTATION_RATE_MIN, MUTATION_RATE_MAX,
@@ -166,8 +166,9 @@ def _draw_pca_scatter(surf, pop, rect):
     xs  = rx + 4 + ((proj[:, 0] - lo[0]) / span[0] * (rw - 8)).astype(int)
     ys  = ry + 4 + ((proj[:, 1] - lo[1]) / span[1] * (rh - 8)).astype(int)
 
-    # colour by ancestor _PHYLO_DEPTH generations back — build color lookup once
-    ancestors              = phylo.ancestor_at(pop['individual_id'], _PHYLO_DEPTH)
+    # colour by ancestor depth generations back — scales with current max gen
+    depth                  = max(4, int(pop['generation'].max()) // 3)
+    ancestors              = phylo.ancestor_at(pop['individual_id'], depth)
     unique_anc, inv        = np.unique(ancestors, return_inverse=True)
     color_map              = [_anc_to_color(int(a)) for a in unique_anc]
 
@@ -197,7 +198,9 @@ def _draw_stacked_area(surf, lineage_history, rect):
             count = frame.get(aid, 0)
             if count == 0:
                 continue
-            h   = max(1, int(count / total * rh))
+            h   = int(count / total * rh)
+            if h == 0:
+                continue
             top = bot - h
             pygame.draw.rect(surf, _anc_to_color(aid), (x, top, max(1, x1 - x), h))
             bot = top

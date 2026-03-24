@@ -10,10 +10,9 @@ _LINEAGE_COLORS = [
 ]
 
 
-def draw_organism(surf, x, y, angle, size, r, g, b, lineage_id=0):
+def draw_organism(surf, x, y, angle, size, r, g, b, halo_color=(100, 100, 180)):
     xi, yi = int(x), int(y)
-    halo = _LINEAGE_COLORS[lineage_id % len(_LINEAGE_COLORS)]
-    pygame.draw.circle(surf, halo, (xi, yi), max(2, int(size) + 2), 1)
+    pygame.draw.circle(surf, halo_color, (xi, yi), max(2, int(size) + 2), 1)
     pygame.draw.circle(surf, (r, g, b), (xi, yi), max(1, int(size)))
     ex = xi + int(np.cos(angle) * (size + 4))
     ey = yi + int(np.sin(angle) * (size + 4))
