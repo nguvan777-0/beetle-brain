@@ -2,7 +2,7 @@
 import numpy as np
 from sim.config import (
     WIDTH, HEIGHT, N_FOOD, MAX_POP,
-    ENERGY_MAX, ENERGY_FOOD,
+    ENERGY_FOOD,
     AGING_ENABLED,
     SIZE_TAX, SPEED_TAX, AGE_TAX,
 )
@@ -16,15 +16,17 @@ from brain.coreml_brain import run_brain
 
 
 def tick(pop, food, rng):
+    energy_max = pop['energy_max']   # per-wight max energy storage
+
     # ── sense ────────────────────────────────────────────────────────────────
-    grid, idx_grid   = paint_grid(pop, food)
-    inputs           = sense(pop, grid)
+    grid, idx_grid = paint_grid(pop, food)
+    inputs         = sense(pop, grid)
 
     # ── brain ────────────────────────────────────────────────────────────────
-    h_new, out       = run_brain(inputs, pop['W1'], pop['W2'], pop['h_state'])
-    pop['h_state']   = h_new
+    h_new, out     = run_brain(inputs, pop['W1'], pop['W2'], pop['h_state'])
+    pop['h_state'] = h_new
     turns  = out[:, 0] * pop['turn_s']
-    speeds = (out[:, 1] + 1.0) * 0.5 * pop['speed']
+    speeds = (out[:, 1] + 1.0) * pop['speed_scale'] * pop['speed']
 
     # ── move ─────────────────────────────────────────────────────────────────
     pop['angle'] += turns
@@ -42,32 +44,27 @@ def tick(pop, food, rng):
     if len(food) > 0:
         org_pos      = np.stack([pop['x'], pop['y']], axis=1)
         dist_f       = np.linalg.norm(food[None, :, :] - org_pos[:, None, :], axis=2)
-        eat_mask     = dist_f < (pop['size'][:, None] + 3.0)
+        eat_mask     = dist_f < (pop['size'][:, None] + pop['mouth'][:, None])
         eaten_food   = eat_mask.any(axis=0)
         eaters_count = eat_mask.sum(axis=0).clip(min=1).astype(np.float32)
         share        = ENERGY_FOOD / eaters_count
         gain_per     = (eat_mask.astype(np.float32) * share[None, :]).sum(axis=1)
-        pop['energy'] = np.minimum(ENERGY_MAX, pop['energy'] + gain_per)
+        pop['energy'] = np.minimum(energy_max, pop['energy'] + gain_per)
         pop['eaten'] += eat_mask.any(axis=1).astype(np.int32)
         food = food[~eaten_food]
 
     # ── predation ────────────────────────────────────────────────────────────
     killed, prey_gain = predation(pop, idx_grid)
-    pop['energy'] = np.minimum(ENERGY_MAX, pop['energy'] + prey_gain)
+    pop['energy'] = np.minimum(energy_max, pop['energy'] + prey_gain)
     pop['eaten'] += (prey_gain > 0).astype(np.int32)
 
     # ── aging ────────────────────────────────────────────────────────────────
     if AGING_ENABLED:
-        decay = (1.0 - pop['weight_decay'])[:, None]     # (N, 1) for broadcasting
+        decay = (1.0 - pop['weight_decay'])[:, None]
         pop['W_body'] *= decay
         pop['W1']     *= decay[:, :, None]
         pop['W2']     *= decay[:, :, None]
-        (pop['speed'], pop['fov'], pop['ray_len'], pop['size'],
-         pop['drain'],  pop['turn_s'],
-         pop['r'], pop['g'], pop['b'],
-         pop['breed_at'], pop['clone_with'],
-         pop['mutation_rate'], pop['mutation_scale'],
-         pop['epigenetic'], pop['weight_decay']) = decode(pop['W_body'])
+        pop.update(decode(pop['W_body']))
 
     # ── death ────────────────────────────────────────────────────────────────
     alive = (pop['energy'] > 0) & (~killed)
