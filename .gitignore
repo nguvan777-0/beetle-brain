@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
+.*.sw*
+*.sw?
 venv/
 .venv/
 build/
