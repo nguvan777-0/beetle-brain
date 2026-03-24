@@ -13,7 +13,7 @@ Organisms ray-cast through a rasterized world grid — O(1) per organism regardl
 
 ## How evolution works
 
-Inspired by the Cambrian explosion — the theory that eyes triggered an evolutionary arms race. Once one organism could see, everything else either learned to see or became prey. We wanted to watch that happen.
+Inspired by the eyes of the Cambrian.
 
 Every organism has a field of view encoded in its genome. It evolves alongside body size, speed, and brain weights — all in the same mutation pass.
 
