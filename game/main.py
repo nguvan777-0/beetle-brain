@@ -8,6 +8,7 @@ from sim import new_world, tick as sim_tick, init_ane, DRAIN_SCALE
 from sim import phylo
 from game.renderer import draw_organism, draw_rays, draw_food
 from game.panel import draw_panel, PANEL_W
+from game.panel.hud import _anc_to_color
 from game.snapshot import save_snapshot, load_snapshot
 
 FPS          = 60
@@ -110,7 +111,8 @@ def main():
                     float(pop['size'].mean()),
                     float(pop['mutation_rate'].mean()),
                 ))
-                anc = phylo.ancestor_at(pop['individual_id'], 8)
+                depth = max(4, int(pop['generation'].max()) // 3)
+                anc = phylo.ancestor_at(pop['individual_id'], depth)
                 u, c = np.unique(anc, return_counts=True)
                 lineage_history.append(dict(zip(u.tolist(), c.tolist())))
                 if len(lineage_history) > HIST_MAX:
@@ -146,10 +148,14 @@ def main():
             draw_rays(surf, pop['x'][sel_idx], pop['y'][sel_idx],
                       pop['fov'][sel_idx], pop['angle'][sel_idx], pop['ray_len'][sel_idx])
 
-        for i in range(len(pop['x'])):
-            draw_organism(surf, pop['x'][i], pop['y'][i], pop['angle'][i],
-                          pop['size'][i], int(pop['r'][i]), int(pop['g'][i]), int(pop['b'][i]),
-                          int(pop['lineage_id'][i]))
+        if len(pop['x']) > 0:
+            depth       = max(4, int(pop['generation'].max()) // 3)
+            anc_ids     = phylo.ancestor_at(pop['individual_id'], depth)
+            halo_colors = [_anc_to_color(int(a)) for a in anc_ids]
+            for i in range(len(pop['x'])):
+                draw_organism(surf, pop['x'][i], pop['y'][i], pop['angle'][i],
+                              pop['size'][i], int(pop['r'][i]), int(pop['g'][i]), int(pop['b'][i]),
+                              halo_colors[i])
 
         if sel_idx is not None and sel_idx < len(pop['x']):
             pygame.draw.circle(surf, (255, 255, 0),
