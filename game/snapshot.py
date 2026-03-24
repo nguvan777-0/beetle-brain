@@ -2,7 +2,7 @@
 import os
 import numpy as np
 from sim.config import N_HIDDEN
-from sim.population.genome import decode
+from sim.population.genome import decode, N_BODY
 from sim.vents import make_vents
 from sim import phylo
 
@@ -27,7 +27,7 @@ def load_snapshot(rng):
     if not os.path.exists(SNAPSHOT_PATH):
         return None, None, None, 0, [], []
     d      = np.load(SNAPSHOT_PATH, allow_pickle=True)
-    W_body = d['W_body'].astype(np.float32)
+    W_body = d['W_body'].astype(np.float32)[:, :N_BODY]   # trim if genome shrank
     t      = decode(W_body)
     pop = {
         'x':          d['x'].astype(np.float32),

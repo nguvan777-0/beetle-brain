@@ -67,6 +67,7 @@ detect_bonus    = 9.0   # max extra predation radius for fully bright organism
                         # (scaled by brightness 0-1, added to size)
 
 [metabolism]
+energy_max_scale = 10.0    # energy_max = energy_max_scale × size²  (storage ∝ volume)
 drain_scale     = 0.015   # basal drain = drain_scale × size^0.75  (Kleiber's law)
 size_tax        = 0.0003  # energy -= size² × size_tax per tick  (big = expensive)
 speed_tax       = 0.004   # energy -= speed² × speed_tax per tick (fast = expensive)
