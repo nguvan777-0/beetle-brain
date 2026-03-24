@@ -175,28 +175,31 @@ def _draw_pca_scatter(surf, pop, rect):
         pygame.draw.circle(surf, color_map[inv[i]], (int(xs[i]), int(ys[i])), 2)
 
 
-def _draw_stacked_area(surf, lineage_history, rect, n_lineages):
-    """Stacked area chart: each lineage a coloured band, time on x-axis."""
+def _draw_stacked_area(surf, lineage_history, rect):
+    """Stacked area chart: each phylo sub-lineage a coloured band, time on x-axis."""
     if len(lineage_history) < 2:
         return
     rx, ry, rw, rh = rect
     pygame.draw.rect(surf, (10, 10, 20), rect)
 
-    T   = len(lineage_history)
-    arr = np.array(lineage_history)          # (T, N_START)
-    totals = arr.sum(axis=1).clip(min=1)
+    all_ids = sorted({aid for frame in lineage_history for aid in frame})
+    if not all_ids:
+        return
 
+    T = len(lineage_history)
     for t in range(T):
-        x   = rx + int(t * rw / T)
-        x1  = rx + int((t + 1) * rw / T)
-        bot = ry + rh
-        for lid in range(n_lineages):
-            if arr[t, lid] == 0:
+        frame  = lineage_history[t]
+        total  = max(1, sum(frame.values()))
+        x      = rx + int(t * rw / T)
+        x1     = rx + int((t + 1) * rw / T)
+        bot    = ry + rh
+        for aid in all_ids:
+            count = frame.get(aid, 0)
+            if count == 0:
                 continue
-            h   = max(1, int(arr[t, lid] / totals[t] * rh))
+            h   = max(1, int(count / total * rh))
             top = bot - h
-            color = _LINEAGE_COLORS[lid % len(_LINEAGE_COLORS)]
-            pygame.draw.rect(surf, color, (x, top, max(1, x1 - x), h))
+            pygame.draw.rect(surf, _anc_to_color(aid), (x, top, max(1, x1 - x), h))
             bot = top
 
     pygame.draw.rect(surf, (50, 50, 80), rect, 1)
@@ -228,34 +231,29 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
     N = len(pop['x'])
     if N > 0:
-        counts    = np.bincount(pop['lineage_id'], minlength=N_START)
-        surviving = int((counts > 0).sum())
-
         txt("POPULATION", font, (160, 200, 160))
-        txt(f"  count   {N:4d}    lineages  {surviving}/{N_START}", font_sm)
+        txt(f"  count   {N:4d}", font_sm)
         txt(f"  max gen {int(pop['generation'].max()):4d}", font_sm)
         txt(f"  max age {int(pop['age'].max()):6d}", font_sm)
         txt(f"  max ate {int(pop['eaten'].max()):4d}", font_sm)
         sep()
 
-        # ── stacked area: lineage populations over time ───────────────────────
+        # ── stacked area: phylo sub-lineage populations over time ────────────
         txt("LINEAGES over time", font, (200, 180, 140))
         chart_h = 90
-        _draw_stacked_area(surf, lineage_history,
-                           (px + 8, y, PANEL_W - 16, chart_h), N_START)
+        _draw_stacked_area(surf, lineage_history, (px + 8, y, PANEL_W - 16, chart_h))
         y += chart_h + 4
-        # legend: surviving lineages as small coloured dots + count
-        lx = px + 10
-        for lid in range(N_START):
-            if counts[lid] == 0:
-                continue
-            color = _LINEAGE_COLORS[lid % len(_LINEAGE_COLORS)]
-            pygame.draw.circle(surf, color, (lx + 4, y + 5), 4)
-            surf.blit(font_sm.render(f"{counts[lid]}", True, color), (lx + 11, y))
-            lx += 38
-            if lx > px + PANEL_W - 38:
-                lx = px + 10
-                y += 14
+        # legend: current sub-lineages sorted by size
+        if lineage_history:
+            lx = px + 10
+            for aid, cnt in sorted(lineage_history[-1].items(), key=lambda kv: -kv[1]):
+                color = _anc_to_color(aid)
+                pygame.draw.circle(surf, color, (lx + 4, y + 5), 4)
+                surf.blit(font_sm.render(f"{cnt}", True, color), (lx + 11, y))
+                lx += 38
+                if lx > px + PANEL_W - 38:
+                    lx = px + 10
+                    y += 14
         y += 16
         sep()
 
