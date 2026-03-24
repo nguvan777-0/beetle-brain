@@ -3,7 +3,6 @@ import numpy as np
 from sim.config import (
     WIDTH, HEIGHT, N_FOOD, MAX_POP,
     ENERGY_FOOD,
-    AGING_ENABLED,
     DRAIN_SCALE, SIZE_TAX, SPEED_TAX, AGE_TAX,
 )
 from sim.vents import refill_vents
@@ -59,14 +58,6 @@ def tick(pop, food, vents, rng):
     killed, prey_gain = predation(pop, idx_grid)
     pop['energy'] = np.minimum(energy_max, pop['energy'] + prey_gain)
     pop['eaten'] += (prey_gain > 0).astype(np.int32)
-
-    # ── aging ────────────────────────────────────────────────────────────────
-    if AGING_ENABLED:
-        decay = (1.0 - pop['weight_decay'])[:, None]
-        pop['W_body'] *= decay
-        pop['W1']     *= decay[:, :, None]
-        pop['W2']     *= decay[:, :, None]
-        pop.update(decode(pop['W_body']))
 
     # ── death ────────────────────────────────────────────────────────────────
     alive = (pop['energy'] > 0) & (~killed)
