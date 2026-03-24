@@ -1,6 +1,6 @@
 """Ray-march sensing: each wight casts N_RAYS through the world grid."""
 import numpy as np
-from sim.config import N_RAYS
+from sim.config import N_RAYS, ENERGY_MAX_SCALE
 from sim.grid.constants import GW, GH, GRID_SCALE, MAX_STEPS, _STEPS, _RAY_OFFSETS
 
 
@@ -42,5 +42,5 @@ def sense(pop, grid):
 
     inputs[:, 0:N_RAYS * 2:2] = 1.0 - _first_hit(food_hits)
     inputs[:, 1:N_RAYS * 2:2] = 1.0 - _first_hit(org_hits)
-    inputs[:, -1]             = pop['energy'] / pop['energy_max']
+    inputs[:, -1]             = pop['energy'] / (ENERGY_MAX_SCALE * pop['size'] ** 2)
     return inputs

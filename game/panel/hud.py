@@ -10,8 +10,8 @@ from sim.config import (
     SIZE_MIN, SIZE_MAX, MUTATION_RATE_MIN, MUTATION_RATE_MAX,
     MUTATION_SCALE_MIN, MUTATION_SCALE_MAX, EPIGENETIC_MIN, EPIGENETIC_MAX,
     WEIGHT_DECAY_MIN, WEIGHT_DECAY_MAX, MOUTH_MIN, MOUTH_MAX,
-    ENERGY_MAX_MIN, ENERGY_MAX_MAX, PRED_RATIO_MIN, PRED_RATIO_MAX,
-    SPEED_SCALE_MIN, SPEED_SCALE_MAX, BREED_AT_MIN, BREED_AT_MAX,
+    PRED_RATIO_MIN, PRED_RATIO_MAX, ENERGY_MAX_SCALE,
+    BREED_AT_MIN, BREED_AT_MAX,
     CLONE_WITH_MIN, CLONE_WITH_MAX, DRAIN_SCALE, N_START, WIDTH, HEIGHT, VENT_RADIUS,
 )
 from sim.population.genome import N_BODY
@@ -94,9 +94,8 @@ def _draw_trait_heatmap(surf, pop, rect, font_sm):
         ('epig',   pop['epigenetic'],               EPIGENETIC_MIN,   EPIGENETIC_MAX),
         ('decay',  pop['weight_decay'],             WEIGHT_DECAY_MIN, WEIGHT_DECAY_MAX),
         ('mouth',  pop['mouth'],                    MOUTH_MIN,        MOUTH_MAX),
-        ('emax',   pop['energy_max'],               ENERGY_MAX_MIN,   ENERGY_MAX_MAX),
+        ('emax',   ENERGY_MAX_SCALE * pop['size']**2, 0, ENERGY_MAX_SCALE * SIZE_MAX**2),
         ('pred×',  pop['pred_ratio'],               PRED_RATIO_MIN,   PRED_RATIO_MAX),
-        ('spscl',  pop['speed_scale'],              SPEED_SCALE_MIN,  SPEED_SCALE_MAX),
     ]
 
     lbl_w  = 38
@@ -262,7 +261,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
         # ── trait heatmap ────────────────────────────────────────────────────
         txt("TRAITS  (median  |  p10–p90 band)", font, (160, 180, 220))
-        n_traits = 15
+        n_traits = 14
         hmap_h   = n_traits * 9
         _draw_trait_heatmap(surf, pop, (px + 8, y, PANEL_W - 16, hmap_h), font_sm)
         y += hmap_h + 4

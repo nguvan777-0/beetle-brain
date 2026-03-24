@@ -52,6 +52,7 @@ AGING_ENABLED     = _cfg["aging"]["enabled"]
 WEIGHT_DECAY_MIN  = _cfg["aging"]["weight_decay_min"]
 WEIGHT_DECAY_MAX  = _cfg["aging"]["weight_decay_max"]
 
+ENERGY_MAX_SCALE = _cfg["metabolism"]["energy_max_scale"]
 DRAIN_SCALE     = _cfg["metabolism"]["drain_scale"]
 SIZE_TAX        = _cfg["metabolism"]["size_tax"]
 SPEED_TAX       = _cfg["metabolism"]["speed_tax"]
