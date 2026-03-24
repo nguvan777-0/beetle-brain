@@ -88,26 +88,27 @@ def main():
             tick += 1
             if len(pop['x']) == 0:
                 break
+            # ── history (inside loop so no ticks are skipped) ─────────────────
+            if tick % 30 == 0:
+                history.append((
+                    float(tick),
+                    float(len(pop['x'])),
+                    float(pop['generation'].max()),
+                    float(pop['speed'].mean()),
+                    float(pop['fov'].mean()),
+                    float(pop['size'].mean()),
+                    float(pop['mutation_rate'].mean()),
+                ))
+                lineage_history.append(np.bincount(pop['lineage_id'], minlength=sim.N_START).astype(np.float32))
+                if len(lineage_history) > HIST_MAX:
+                    lineage_history.pop(0)
+                if len(history) > HIST_MAX:
+                    history.pop(0)
 
         if sel_idx is not None and sel_idx >= len(pop['x']):
             sel_idx = None
 
-        # ── history ──────────────────────────────────────────────────────────
-        if tick % 30 == 0 and len(pop['x']) > 0:
-            history.append((
-                float(tick),
-                float(len(pop['x'])),
-                float(pop['generation'].max()),
-                float(pop['speed'].mean()),
-                float(pop['fov'].mean()),
-                float(pop['size'].mean()),
-                float(pop['mutation_rate'].mean()),
-            ))
-            lineage_history.append(np.bincount(pop['lineage_id'], minlength=sim.N_START).astype(np.float32))
-            if len(lineage_history) > HIST_MAX:
-                lineage_history.pop(0)
-            if len(history) > HIST_MAX:
-                history.pop(0)
+        if len(pop['x']) > 0:
             top_idx = np.where(pop['eaten'] > 0)[0]
             for i in top_idx:
                 hall_fame.append((
