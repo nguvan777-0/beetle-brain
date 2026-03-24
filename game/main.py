@@ -8,7 +8,7 @@ from sim import new_world, tick as sim_tick, init_ane, DRAIN_SCALE
 from sim import phylo
 from game.renderer import draw_organism, draw_rays, draw_food
 from game.panel import draw_panel, PANEL_W
-from game.panel.hud import _anc_to_color
+from game.panel.hud import _anc_color
 from game.snapshot import save_snapshot, load_snapshot
 
 FPS          = 60
@@ -74,11 +74,11 @@ def main():
         # ── events ───────────────────────────────────────────────────────────
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                save_snapshot(world, tick, history, hall_fame)
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                pygame.quit(); sys.exit()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_s:
                 save_snapshot(world, tick, history, hall_fame)
+                pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_l:
                 result = load_snapshot(rng)
                 if result[0] is not None:
@@ -159,7 +159,7 @@ def main():
         if len(pop['x']) > 0:
             depth       = max(4, int(pop['generation'].max()) // 3)
             anc_ids     = phylo.ancestor_at(pop['individual_id'], depth, world['phylo'])
-            halo_colors = [_anc_to_color(int(a)) for a in anc_ids]
+            halo_colors = [_anc_color(int(a), world['phylo']) for a in anc_ids]
             for i in range(len(pop['x'])):
                 draw_organism(surf, pop['x'][i], pop['y'][i], pop['angle'][i],
                               pop['size'][i], int(pop['r'][i]), int(pop['g'][i]), int(pop['b'][i]),

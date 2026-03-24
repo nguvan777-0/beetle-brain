@@ -14,6 +14,7 @@ def save_snapshot(world, tick, history, hall_fame):
     food     = world['food']
     vents    = world['vents']
     hist_arr = np.array(history, dtype=np.float32) if history else np.empty((0, 7), dtype=np.float32)
+    phylo_state = world['phylo']
     np.savez_compressed(SNAPSHOT_PATH,
         x=pop['x'], y=pop['y'], angle=pop['angle'], energy=pop['energy'],
         W_body=pop['W_body'], W1=pop['W1'], W2=pop['W2'],
@@ -21,7 +22,10 @@ def save_snapshot(world, tick, history, hall_fame):
         generation=pop['generation'], age=pop['age'], eaten=pop['eaten'],
         lineage_id=pop['lineage_id'], individual_id=pop['individual_id'],
         food=food, vents=vents, tick=np.array([tick], dtype=np.int32),
-        hist=hist_arr)
+        hist=hist_arr,
+        phylo_parent=phylo_state['parent'],
+        phylo_hue=phylo_state['hue'],
+        phylo_next_id=np.array([phylo_state['next_id']], dtype=np.int32))
     print(f"[saved] {len(pop['x'])} organisms → {SNAPSHOT_PATH}  (tick {tick})")
 
 
@@ -51,8 +55,15 @@ def load_snapshot(rng):
         'individual_id': (d['individual_id'].astype(np.int32) if 'individual_id' in d
                           else np.arange(n, dtype=np.int32)),
     }
-    vents       = d['vents'].astype(np.float32) if 'vents' in d else make_vents()
-    phylo_state = phylo.from_snapshot(pop['individual_id'])
+    vents = d['vents'].astype(np.float32) if 'vents' in d else make_vents()
+    if 'phylo_parent' in d:
+        phylo_state = {'parent':  d['phylo_parent'].astype(np.int32),
+                       'hue':     d['phylo_hue'].astype(np.float32) if 'phylo_hue' in d else None,
+                       'next_id': int(d['phylo_next_id'][0])}
+        if phylo_state['hue'] is None:
+            phylo_state['hue'] = np.zeros(phylo.M, dtype=np.float32)
+    else:
+        phylo_state = phylo.from_snapshot(pop['individual_id'])
     world       = {'pop': pop, 'food': d['food'].astype(np.float32),
                    'vents': vents, 'phylo': phylo_state}
     history     = [tuple(row) for row in d['hist']] if d['hist'].ndim == 2 and len(d['hist']) else []

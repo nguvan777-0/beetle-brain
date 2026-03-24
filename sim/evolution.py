@@ -38,5 +38,5 @@ def clone_batch(pop, idx, rng, phylo_state):
         'eaten':         np.zeros(n, dtype=np.int32),
         'h_state':       pop['h_state'][idx] * pop['epigenetic'][idx, None],
         'lineage_id':    pop['lineage_id'][idx].copy(),
-        'individual_id': phylo.alloc(n, pop['individual_id'][idx], phylo_state),
+        'individual_id': phylo.alloc(n, pop['individual_id'][idx], phylo_state, rng),
     }
