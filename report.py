@@ -42,7 +42,7 @@ def generate(stats, path="report.html"):
 
     figs = []
 
-    figs.append(_fig_lineage_river(stats, ticks))
+    figs.append(_fig_lineage_tree(stats))
     figs.append(_fig_population(samples, ticks))
     figs.append(_fig_traits(samples, ticks))
     figs.append(_fig_sensing(samples, ticks))
@@ -164,9 +164,6 @@ def generate(stats, path="report.html"):
   {summary_html}
 </header>
 
-<div class="section-title">lineage river</div>
-<div class="hof" style="padding-top:0">{_lineage_legend_html(stats)}</div>
-
 <div class="charts">
 {"".join(chart_blocks)}
 </div>
@@ -184,48 +181,97 @@ def generate(stats, path="report.html"):
 
 # ── individual figures ────────────────────────────────────────────────────────
 
-def _fig_lineage_river(stats, ticks):
+def _fig_lineage_tree(stats):
     import plotly.graph_objects as go
 
-    series = stats._lineage_series
-    hues   = stats._lineage_hues
-    if not series:
+    hues       = stats._lineage_hues
+    first_tick = stats._lineage_first_tick
+    parent_map = stats._lineage_parent_map
+    series     = stats._lineage_series
+
+    if not hues:
         return None
 
-    # sort by total count descending so dominant lineages are at the bottom
-    sorted_ids = sorted(series.keys(), key=lambda uid: -sum(c for _, c in series[uid]))
+    nodes = set(hues.keys())
 
-    # build a dense tick→count map for each lineage
-    tick_set = sorted(set(ticks))
-    tick_idx = {t: i for i, t in enumerate(tick_set)}
+    # ── tree layout ───────────────────────────────────────────────────────────
+    children = {n: [] for n in nodes}
+    roots    = []
+    for node in nodes:
+        par = parent_map.get(node)
+        if par in nodes:
+            children[par].append(node)
+        else:
+            roots.append(node)
+
+    # assign y via DFS — leaves get sequential slots, internals get midpoint
+    y_pos   = {}
+    counter = [0]
+
+    def _assign_y(node):
+        kids = sorted(children[node], key=lambda k: first_tick.get(k, 0))
+        if not kids:
+            y_pos[node] = counter[0]
+            counter[0] += 1
+        else:
+            for kid in kids:
+                _assign_y(kid)
+            y_pos[node] = sum(y_pos[k] for k in kids) / len(kids)
+
+    for root in sorted(roots, key=lambda r: first_tick.get(r, 0)):
+        _assign_y(root)
+
+    # total count per lineage for node sizing
+    totals = {uid: sum(c for _, c in series.get(uid, [])) for uid in nodes}
+    max_total = max(totals.values()) if totals else 1
+
+    # ── build traces ─────────────────────────────────────────────────────────
+    edge_x, edge_y = [], []
+    for child, par in parent_map.items():
+        if child not in y_pos or par not in y_pos:
+            continue
+        cx = first_tick.get(child, 0)
+        cy = y_pos[child]
+        px = first_tick.get(par, 0)
+        py = y_pos[par]
+        # L-shaped connector: horizontal from parent, then drop to child
+        edge_x += [px, cx, cx, None]
+        edge_y += [py, py, cy, None]
+
+    node_x     = [first_tick.get(n, 0) for n in nodes]
+    node_y     = [y_pos.get(n, 0)      for n in nodes]
+    node_color = [_hue_to_rgb_css(hues.get(n, 0)) for n in nodes]
+    node_size  = [6 + 18 * (totals.get(n, 0) / max_total) for n in nodes]
+    node_text  = [
+        f'lineage {n}<br>first tick {first_tick.get(n,0):,}<br>'
+        f'total wight-ticks {totals.get(n,0)}'
+        for n in nodes
+    ]
 
     fig = go.Figure()
-    for uid in sorted_ids:
-        hue   = hues.get(uid, 0.0)
-        color = _hue_to_rgb_css(hue)
-        fill_color = _hue_to_rgba_css(hue, 0.75)
-
-        y = [0] * len(tick_set)
-        for t, cnt in series[uid]:
-            if t in tick_idx:
-                y[tick_idx[t]] = cnt
-
-        fig.add_trace(go.Scatter(
-            x=tick_set, y=y,
-            mode='lines',
-            name=f'lineage {uid}',
-            stackgroup='river',
-            line=dict(width=0.5, color=color),
-            fillcolor=fill_color,
-            hovertemplate=f'lineage {uid}<br>tick %{{x:,}}<br>count %{{y}}<extra></extra>',
-        ))
+    fig.add_trace(go.Scatter(
+        x=edge_x, y=edge_y,
+        mode='lines',
+        line=dict(color='#30363d', width=1),
+        hoverinfo='skip',
+        showlegend=False,
+    ))
+    fig.add_trace(go.Scatter(
+        x=node_x, y=node_y,
+        mode='markers',
+        marker=dict(color=node_color, size=node_size,
+                    line=dict(color='#21262d', width=1)),
+        text=node_text,
+        hovertemplate='%{text}<extra></extra>',
+        showlegend=False,
+    ))
 
     fig.update_layout(
-        title=dict(text='lineage river — population share over time', font=dict(size=12, color='#8b949e')),
-        height=280,
-        showlegend=False,
-        xaxis_title='tick',
-        yaxis_title='wights',
+        title=dict(text='lineage tree — forks over time, node size = dominance, color = phylo hue',
+                   font=dict(size=12, color='#8b949e')),
+        height=max(300, len(nodes) * 14),
+        xaxis_title='tick of first appearance',
+        yaxis=dict(visible=False),
     )
     return fig
 
