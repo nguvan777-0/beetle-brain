@@ -200,7 +200,6 @@ def main():
 
 
 def _exit_with_report(stats, tick, world, t_start, extinct):
-    import time
     elapsed = time.time() - t_start
     pop = world['pop'] if not extinct else None
     stats.finalize(tick, elapsed, pop=pop, phylo_state=world['phylo'], extinct=extinct)
