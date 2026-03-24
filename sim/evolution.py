@@ -15,13 +15,14 @@ def clone_batch(pop, idx, rng):
     noise_W1 = rng.random((n, N_INPUTS, N_HIDDEN)).astype(np.float32)
     noise_W2 = rng.random((n, N_HIDDEN, N_OUTPUTS)).astype(np.float32)
 
-    mut_r  = (rng.standard_normal((n, N_BODY))              * mut_scale).astype(np.float32)
-    mut_W1 = (rng.standard_normal((n, N_INPUTS, N_HIDDEN))  * mut_scale[:, :, None]).astype(np.float32)
-    mut_W2 = (rng.standard_normal((n, N_HIDDEN, N_OUTPUTS)) * mut_scale[:, :, None]).astype(np.float32)
+    mut_r  = (rng.standard_normal((n, N_BODY)) * mut_scale).astype(np.float32)
 
-    W_body = pop['W_body'][idx] + np.where(noise_r  < mut_rate,             mut_r,  0)
-    W1     = pop['W1'][idx]     + np.where(noise_W1 < mut_rate[:, :, None], mut_W1, 0)
-    W2     = pop['W2'][idx]     + np.where(noise_W2 < mut_rate[:, :, None], mut_W2, 0)
+    # germline/somatic split:
+    # W_body (body) is inherited from parent and mutated — somatic lineage
+    # W1/W2  (brain) reset fresh each generation — germline reset
+    W_body = pop['W_body'][idx] + np.where(noise_r < mut_rate, mut_r, 0)
+    W1     = (rng.standard_normal((n, N_INPUTS, N_HIDDEN))  * 0.8).astype(np.float32)
+    W2     = (rng.standard_normal((n, N_HIDDEN, N_OUTPUTS)) * 0.8).astype(np.float32)
 
     t   = decode(W_body)
     ang = pop['angle'][idx] + np.pi + rng.uniform(-0.5, 0.5, n).astype(np.float32)
