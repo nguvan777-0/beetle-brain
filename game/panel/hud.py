@@ -1,15 +1,48 @@
 """Main stats panel drawn on the right side of the screen."""
 import numpy as np
 import pygame
-from sim.config import SPEED_MAX, SIZE_MAX, MUTATION_RATE_MAX, DRAIN_SCALE
+from sim.config import SPEED_MAX, SIZE_MAX, MUTATION_RATE_MAX, DRAIN_SCALE, N_START
 from sim.population.genome import N_BODY
 from game.panel.sparkline import draw_sparkline
 
 PANEL_W = 320
 
+_LINEAGE_COLORS = [
+    (255, 100, 100), (100, 200, 255), (100, 255, 140), (255, 200,  60),
+    (200, 100, 255), (255, 150,  50), ( 80, 220, 200), (220, 220, 100),
+    (180,  80, 180), (100, 180, 100), (255, 120, 180), (140, 180, 255),
+]
+
+
+def _draw_stacked_area(surf, lineage_history, rect, n_lineages):
+    """Stacked area chart: each lineage a coloured band, time on x-axis."""
+    if len(lineage_history) < 2:
+        return
+    rx, ry, rw, rh = rect
+    pygame.draw.rect(surf, (10, 10, 20), rect)
+
+    T   = len(lineage_history)
+    arr = np.array(lineage_history)          # (T, N_START)
+    totals = arr.sum(axis=1).clip(min=1)
+
+    for t in range(T):
+        x   = rx + int(t * rw / T)
+        x1  = rx + int((t + 1) * rw / T)
+        bot = ry + rh
+        for lid in range(n_lineages):
+            if arr[t, lid] == 0:
+                continue
+            h   = max(1, int(arr[t, lid] / totals[t] * rh))
+            top = bot - h
+            color = _LINEAGE_COLORS[lid % len(_LINEAGE_COLORS)]
+            pygame.draw.rect(surf, color, (x, top, max(1, x1 - x), h))
+            bot = top
+
+    pygame.draw.rect(surf, (50, 50, 80), rect, 1)
+
 
 def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
-               history, hall_fame, sim_speed=1):
+               history, lineage_history, hall_fame, sim_speed=1):
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
@@ -34,27 +67,50 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
     N = len(pop['x'])
     if N > 0:
+        counts    = np.bincount(pop['lineage_id'], minlength=N_START)
+        surviving = int((counts > 0).sum())
+
         txt("POPULATION", font, (160, 200, 160))
-        txt(f"  count   {N:4d}", font_sm)
+        txt(f"  count   {N:4d}    lineages  {surviving}/{N_START}", font_sm)
         txt(f"  max gen {int(pop['generation'].max()):4d}", font_sm)
         txt(f"  max age {int(pop['age'].max()):6d}", font_sm)
         txt(f"  max ate {int(pop['eaten'].max()):4d}", font_sm)
         sep()
 
-        txt("TRAIT TRENDS  (pop avg)", font, (160, 180, 220))
+        # ── stacked area: lineage populations over time ───────────────────────
+        txt("LINEAGES over time", font, (200, 180, 140))
+        chart_h = 90
+        _draw_stacked_area(surf, lineage_history,
+                           (px + 8, y, PANEL_W - 16, chart_h), N_START)
+        y += chart_h + 4
+        # legend: surviving lineages as small coloured dots + count
+        lx = px + 10
+        for lid in range(N_START):
+            if counts[lid] == 0:
+                continue
+            color = _LINEAGE_COLORS[lid % len(_LINEAGE_COLORS)]
+            pygame.draw.circle(surf, color, (lx + 4, y + 5), 4)
+            surf.blit(font_sm.render(f"{counts[lid]}", True, color), (lx + 11, y))
+            lx += 38
+            if lx > px + PANEL_W - 38:
+                lx = px + 10
+                y += 14
+        y += 16
+        sep()
+
+        # ── trait sparklines ─────────────────────────────────────────────────
+        txt("TRAITS  (pop avg)", font, (160, 180, 220))
         if len(history) > 1:
             for label, col_idx, color, lo, hi in [
-                ("speed",    3, (100, 200, 255), 0,    SPEED_MAX),
-                ("fov °",    4, (200, 160, 255), 0,    180),
-                ("size",     5, (255, 180, 100), 0,    SIZE_MAX),
-                ("mut rate", 6, (255, 100, 100), 0,    MUTATION_RATE_MAX),
+                ("speed",    3, (100, 200, 255), 0, SPEED_MAX),
+                ("size",     5, (255, 180, 100), 0, SIZE_MAX),
+                ("mut rate", 6, (255, 100, 100), 0, MUTATION_RATE_MAX),
             ]:
                 data = [h[col_idx] for h in history]
-                if label == "fov °":
-                    data = [np.degrees(v) for v in data]
-                txt(f"  {label}", font_sm, color)
-                draw_sparkline(surf, data, (px + 16, y, PANEL_W - 60, 22), color, lo, hi)
-                y += 28
+                lbl_surf = font_sm.render(f"  {label}", True, color)
+                surf.blit(lbl_surf, (px + 10, y))
+                draw_sparkline(surf, data, (px + 90, y, PANEL_W - 100, 14), color, lo, hi)
+                y += 18
         sep()
 
     if hall_fame:
@@ -65,20 +121,23 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         sep()
 
     if sel_idx is not None and sel_idx < N:
+        lid  = int(pop['lineage_id'][sel_idx])
+        lcol = _LINEAGE_COLORS[lid % len(_LINEAGE_COLORS)]
         txt("SELECTED", font, (255, 255, 100))
         sr, sg, sb = int(pop['r'][sel_idx]), int(pop['g'][sel_idx]), int(pop['b'][sel_idx])
+        pygame.draw.circle(surf, lcol,    (px + 18, y + 6), max(2, int(pop['size'][sel_idx])) + 2, 1)
         pygame.draw.circle(surf, (sr, sg, sb), (px + 18, y + 6), max(1, int(pop['size'][sel_idx])))
         y += 4
         for row in [
+            f"  lineage {lid}",
             f"  gen    {int(pop['generation'][sel_idx])}",
             f"  age    {int(pop['age'][sel_idx]):,}",
             f"  eaten  {int(pop['eaten'][sel_idx])}",
             f"  energy {pop['energy'][sel_idx]:.0f}",
             f"  speed  {pop['speed'][sel_idx]:.2f}",
             f"  fov    {np.degrees(pop['fov'][sel_idx]):.0f}°",
-            f"  ray    {pop['ray_len'][sel_idx]:.0f}",
             f"  size   {pop['size'][sel_idx]:.1f}",
-            f"  drain  {DRAIN_SCALE * pop['size'][sel_idx]**0.75:.3f}  (size-derived)",
+            f"  drain  {DRAIN_SCALE * pop['size'][sel_idx]**0.75:.3f}",
             f"  mut    {pop['mutation_rate'][sel_idx]:.2f}",
         ]:
             txt(row, font_sm, (200, 200, 120))
@@ -101,4 +160,4 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         y = bar_y + 38
 
     y = surf.get_height() - 30
-    txt("S save  L load  click inspect", font_sm, (80, 80, 100))
+    txt("S save  L load  R restart  click inspect", font_sm, (80, 80, 100))

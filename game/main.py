@@ -35,6 +35,7 @@ def main():
         tick             = 0
         history          = []
         hall_fame        = []
+    lineage_history = []
 
     sel_idx       = None
     sim_speed_idx = 0
@@ -52,7 +53,7 @@ def main():
                 if (event.type == pygame.KEYDOWN and event.key == pygame.K_r) or \
                    (event.type == pygame.MOUSEBUTTONDOWN and btn_rect.collidepoint(event.pos)):
                     pop, food, vents = new_world(rng)
-                    tick = 0; history = []; hall_fame = []; sel_idx = None
+                    tick = 0; history = []; hall_fame = []; lineage_history = []; sel_idx = None
             continue
 
         # ── events ───────────────────────────────────────────────────────────
@@ -76,6 +77,9 @@ def main():
                     sel_idx = idx if dists[idx] < 40 else None
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 sim_speed_idx = (sim_speed_idx + 1) % len(SPEED_STEPS)
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                pop, food, vents = new_world(rng)
+                tick = 0; history = []; hall_fame = []; lineage_history = []; sel_idx = None
 
         # ── tick ─────────────────────────────────────────────────────────────
         steps = SPEED_STEPS[sim_speed_idx] or 80
@@ -99,6 +103,9 @@ def main():
                 float(pop['size'].mean()),
                 float(pop['mutation_rate'].mean()),
             ))
+            lineage_history.append(np.bincount(pop['lineage_id'], minlength=sim.N_START).astype(np.float32))
+            if len(lineage_history) > HIST_MAX:
+                lineage_history.pop(0)
             if len(history) > HIST_MAX:
                 history.pop(0)
             top_idx = np.where(pop['eaten'] > 0)[0]
@@ -127,7 +134,8 @@ def main():
 
         for i in range(len(pop['x'])):
             draw_organism(surf, pop['x'][i], pop['y'][i], pop['angle'][i],
-                          pop['size'][i], int(pop['r'][i]), int(pop['g'][i]), int(pop['b'][i]))
+                          pop['size'][i], int(pop['r'][i]), int(pop['g'][i]), int(pop['b'][i]),
+                          int(pop['lineage_id'][i]))
 
         if sel_idx is not None and sel_idx < len(pop['x']):
             pygame.draw.circle(surf, (255, 255, 0),
@@ -135,7 +143,7 @@ def main():
                                int(pop['size'][sel_idx]) + 3, 1)
 
         draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
-                   history, hall_fame, SPEED_STEPS[sim_speed_idx])
+                   history, lineage_history, hall_fame, SPEED_STEPS[sim_speed_idx])
 
         pygame.display.flip()
         clock.tick(FPS)
