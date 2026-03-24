@@ -4,10 +4,11 @@ sim.py — vectorized beetle-brain simulation engine
 The entire population lives in numpy arrays.
 No Python loop over wights — one tick = a handful of numpy calls.
 
-Sensing is O(1) per organism via a rasterized world grid:
-  - food and organisms are painted into a (2, GH, GW) uint8 grid
-  - each organism ray-marches N_RAYS × MAX_STEPS pixels — always the same
-  - adding more organisms doesn't slow down sensing at all
+Everything is O(N) via a rasterized world grid:
+  - food and organisms are painted into a (2, GH, GW) uint8 grid + index grid
+  - sensing: each wight ray-marches N_RAYS × MAX_STEPS pixels — always the same
+  - predation: each wight reads a 21×21 patch of the index grid — always the same
+  - adding more wights doesn't slow down sensing or predation
 
 Wight genome = W_body (9 floats) + W1 (180 floats) + W2 (24 floats) = 213 floats.
 The wight IS its weights. Nothing else.
@@ -77,6 +78,11 @@ _STEPS      = np.arange(1, MAX_STEPS + 1, dtype=np.float32)  # (90,) reused ever
 # precomputed ray offsets from center
 _RAY_OFFSETS = np.linspace(-1, 1, N_RAYS, dtype=np.float32)  # scaled by fov/2 per tick
 
+# predation grid patch — max detection radius in grid pixels + 1 buffer
+# SIZE_MAX + CAMO_BONUS = 9 + 9 = 18 world units → 9 grid pixels
+PRED_R_PIX  = int(np.ceil((SIZE_MAX + CAMO_BONUS) * GRID_SCALE)) + 1  # 10
+_PR_OFF     = np.arange(-PRED_R_PIX, PRED_R_PIX + 1, dtype=np.int32)  # 21 values → 21×21 patch
+
 
 # ── INIT ──────────────────────────────────────────────────────────────────────
 def init_ane():
@@ -132,13 +138,12 @@ def new_world(rng=None):
 # ── SENSING (grid-based, O(1) per organism) ────────────────────────────────────
 def _paint_grid(pop, food):
     """
-    Rasterize the world into a (2, GH, GW) uint8 grid.
+    Rasterize the world into a (2, GH, GW) uint8 grid + an index grid.
     Channel 0 — food:      1 where food exists, 0 elsewhere
-    Channel 1 — organisms: normalized size (1-255), 0 = empty
-
-    This is the shared data structure. Every organism writes once;
-    every organism reads independently. They never query each other directly.
+    Channel 1 — organisms: normalized brightness (1-255), 0 = empty
+    idx_grid  — organism index at each cell (-1 = empty); used for O(N) predation
     """
+    N    = len(pop['x'])
     grid = np.zeros((2, GH, GW), dtype=np.uint8)
 
     # paint food
@@ -155,7 +160,11 @@ def _paint_grid(pop, food):
     norm = np.clip(brightness, 1, 255).astype(np.uint8)
     grid[1, oy, ox] = norm
 
-    return grid
+    # index grid — maps grid cell → organism index for predation lookups
+    idx_grid = np.full((GH, GW), -1, dtype=np.int32)
+    idx_grid[oy, ox] = np.arange(N, dtype=np.int32)
+
+    return grid, idx_grid
 
 
 def _sense(pop, grid):
@@ -215,13 +224,55 @@ def _sense(pop, grid):
     return inputs
 
 
+# ── PREDATION (grid-based, O(N) per tick) ────────────────────────────────────
+def _predation(pop, idx_grid):
+    """
+    For each wight, read a 21×21 patch from idx_grid to find nearby candidates.
+    Only candidate pairs within actual detection radius are checked.
+    O(N × 441) instead of O(N²) — constant patch size regardless of population.
+    """
+    N = len(pop['x'])
+    if N <= 1:
+        return np.zeros(N, dtype=bool), np.zeros(N, dtype=np.float32)
+
+    brightness = (pop['r'].astype(np.float32) + pop['g'] + pop['b']) / (3.0 * 255.0)
+    detect_r   = pop['size'] + (brightness * CAMO_BONUS if CAMO_ENABLED else 0.0)
+
+    oy = np.clip((pop['y'] * GRID_SCALE).astype(np.int32), 0, GH - 1)
+    ox = np.clip((pop['x'] * GRID_SCALE).astype(np.int32), 0, GW - 1)
+
+    # gather 21×21 patch of organism indices around each wight — toroidal wrap
+    row_idx = (oy[:, None, None] + _PR_OFF[None, :, None]) % GH   # (N, 21, 1)
+    col_idx = (ox[:, None, None] + _PR_OFF[None, None, :]) % GW   # (N, 1, 21)
+    j_idx   = idx_grid[row_idx, col_idx].reshape(N, -1)            # (N, 441)
+
+    i_idx  = np.arange(N, dtype=np.int32)[:, None]                 # (N, 1)
+    valid  = (j_idx >= 0) & (j_idx != i_idx)                      # (N, 441)
+    j_safe = np.where(valid, j_idx, 0)                             # safe indices for gather
+
+    dx   = pop['x'][:, None] - pop['x'][j_safe]                    # (N, 441)
+    dy   = pop['y'][:, None] - pop['y'][j_safe]                    # (N, 441)
+    dist = np.sqrt(dx*dx + dy*dy)                                   # (N, 441)
+
+    in_range = dist < (pop['size'][:, None] + detect_r[j_safe])    # (N, 441)
+    bigger   = pop['size'][:, None] > pop['size'][j_safe] * 1.25   # (N, 441)
+    kills    = valid & in_range & bigger                            # (N, 441)
+
+    prey_gain = (kills * pop['energy'][j_safe]).sum(axis=1) * 0.7  # (N,)
+
+    killed = np.zeros(N, dtype=bool)
+    killed[j_idx[kills]] = True
+
+    return killed, prey_gain
+
+
 # ── TICK (fully vectorized) ───────────────────────────────────────────────────
 def tick(pop, food, rng):
     N = len(pop['x'])
 
     # ── paint world grid once, sense all organisms from it ──────────────────
-    grid       = _paint_grid(pop, food)
-    inputs     = _sense(pop, grid)
+    grid, idx_grid = _paint_grid(pop, food)
+    inputs         = _sense(pop, grid)
 
     # ── brain forward pass (recurrent) ──────────────────────────────────────
     h_new, out       = run_brain(inputs, pop['W1'], pop['W2'], pop['h_state'])
@@ -247,27 +298,10 @@ def tick(pop, food, rng):
         pop['eaten'] += eat_mask.any(axis=1).astype(np.int32)
         food = food[~eaten_food]
 
-    # ── predation ───────────────────────────────────────────────────────────
-    if N > 1:
-        org_pos  = np.stack([pop['x'], pop['y']], axis=1)
-        dist_o   = np.linalg.norm(org_pos[None,:,:] - org_pos[:,None,:], axis=2)  # (N, N)
-        np.fill_diagonal(dist_o, np.inf)
-        # bright prey are detectable from further away — camouflage pressure
-        brightness = (pop['r'].astype(np.float32) + pop['g'] + pop['b']) / (3.0 * 255.0)  # (N,) 0-1
-        detect_r   = pop['size'] + (brightness * CAMO_BONUS if CAMO_ENABLED else 0.0)     # (N,)
-        touch    = dist_o < (pop['size'][:, None] + detect_r[None, :])                    # (N, N)
-        bigger   = pop['size'][:, None] > pop['size'][None, :] * 1.25             # (N, N)
-        kills    = touch & bigger                                                   # (N, N)
-        killed   = kills.any(axis=0)                                               # (N,)
-        killer   = kills.any(axis=1)                                               # (N,)
-        # killer gains energy from prey
-        prey_energy = (kills * pop['energy'][None, :]).sum(axis=1)
-        pop['energy'] = np.where(killer,
-                                  np.minimum(ENERGY_MAX, pop['energy'] + prey_energy * 0.7),
-                                  pop['energy'])
-        pop['eaten'] += kills.sum(axis=1).astype(np.int32)
-    else:
-        killed = np.zeros(N, dtype=bool)
+    # ── predation (O(N) via index grid patch lookup) ────────────────────────
+    killed, prey_gain = _predation(pop, idx_grid)
+    pop['energy'] = np.minimum(ENERGY_MAX, pop['energy'] + prey_gain)
+    pop['eaten'] += (prey_gain > 0).astype(np.int32)
 
     # ── aging: weights decay toward zero each tick ──────────────────────────
     # traits drift toward midpoint, brain softens — old organisms get worse
