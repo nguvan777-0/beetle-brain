@@ -2,8 +2,8 @@
 import numpy as np
 from sim.config import (
     WIDTH, HEIGHT, N_FOOD, MAX_POP,
-    ENERGY_MAX, ENERGY_FOOD, ENERGY_BREED, ENERGY_CLONE,
-    AGING_ENABLED, WEIGHT_DECAY,
+    ENERGY_MAX, ENERGY_FOOD,
+    AGING_ENABLED,
     SIZE_TAX, SPEED_TAX, AGE_TAX,
 )
 from sim.grid.painter import paint_grid
@@ -58,20 +58,23 @@ def tick(pop, food, rng):
 
     # ── aging ────────────────────────────────────────────────────────────────
     if AGING_ENABLED:
-        decay = 1.0 - WEIGHT_DECAY
+        decay = (1.0 - pop['weight_decay'])[:, None]     # (N, 1) for broadcasting
         pop['W_body'] *= decay
-        pop['W1']     *= decay
-        pop['W2']     *= decay
+        pop['W1']     *= decay[:, :, None]
+        pop['W2']     *= decay[:, :, None]
         (pop['speed'], pop['fov'], pop['ray_len'], pop['size'],
          pop['drain'],  pop['turn_s'],
-         pop['r'], pop['g'], pop['b']) = decode(pop['W_body'])
+         pop['r'], pop['g'], pop['b'],
+         pop['breed_at'], pop['clone_with'],
+         pop['mutation_rate'], pop['mutation_scale'],
+         pop['epigenetic'], pop['weight_decay']) = decode(pop['W_body'])
 
     # ── death ────────────────────────────────────────────────────────────────
     alive = (pop['energy'] > 0) & (~killed)
 
     # ── breed ────────────────────────────────────────────────────────────────
-    can_breed = alive & (pop['energy'] >= ENERGY_BREED)
-    pop['energy'] = np.where(can_breed, ENERGY_CLONE, pop['energy'])
+    can_breed = alive & (pop['energy'] >= pop['breed_at'])
+    pop['energy'] = np.where(can_breed, pop['clone_with'], pop['energy'])
 
     if can_breed.any():
         children = clone_batch(pop, np.where(can_breed)[0], rng)
