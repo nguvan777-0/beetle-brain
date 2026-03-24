@@ -23,7 +23,7 @@ Every wight has a field of view encoded in its genome. It evolves alongside body
 - touch something smaller (>1.25× your size) → eat it, gain 70% of its energy
 - hit 160 energy → clone + mutate, reset to 80
 - hit 0 energy → die
-- population cap at 300 forces selection pressure
+- food scarcity is the only population limit — Malthusian pressure
 - size, speed, fov, ray length, drain, color, and the entire brain — all evolve together
 
 ## Tuning the world
@@ -48,8 +48,6 @@ epigenetic     = 0.25   # fraction of parent memory inherited at birth
 enabled      = true
 detect_bonus = 9.0    # how much further bright prey can be hunted from
 ```
-
-No Python required.
 
 ## Run
 
