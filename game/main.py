@@ -143,7 +143,8 @@ def main():
                                int(pop['size'][sel_idx]) + 3, 1)
 
         draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
-                   history, lineage_history, hall_fame, SPEED_STEPS[sim_speed_idx])
+                   history, lineage_history, hall_fame, SPEED_STEPS[sim_speed_idx],
+                   vents=vents)
 
         pygame.display.flip()
         clock.tick(FPS)
