@@ -5,6 +5,7 @@ import pygame
 
 import sim
 from sim import new_world, tick as sim_tick, init_ane, DRAIN_SCALE
+from sim import phylo
 from game.renderer import draw_organism, draw_rays, draw_food
 from game.panel import draw_panel, PANEL_W
 from game.snapshot import save_snapshot, load_snapshot
@@ -109,7 +110,9 @@ def main():
                     float(pop['size'].mean()),
                     float(pop['mutation_rate'].mean()),
                 ))
-                lineage_history.append(np.bincount(pop['lineage_id'], minlength=sim.N_START).astype(np.float32))
+                anc = phylo.ancestor_at(pop['individual_id'], 8)
+                u, c = np.unique(anc, return_counts=True)
+                lineage_history.append(dict(zip(u.tolist(), c.tolist())))
                 if len(lineage_history) > HIST_MAX:
                     lineage_history.pop(0)
                 if len(history) > HIST_MAX:
