@@ -14,6 +14,35 @@ _LINEAGE_COLORS = [
 ]
 
 
+def _draw_pca_scatter(surf, pop, rect):
+    """Project W_body onto top 2 PCs, plot each wight coloured by lineage."""
+    if len(pop['x']) < 3:
+        return
+    rx, ry, rw, rh = rect
+    pygame.draw.rect(surf, (10, 10, 20), rect)
+    pygame.draw.rect(surf, (40, 40, 60), rect, 1)
+
+    W = pop['W_body'].astype(np.float32)
+    W -= W.mean(axis=0)
+    # SVD — columns of Vt are principal components
+    try:
+        _, _, Vt = np.linalg.svd(W, full_matrices=False)
+    except np.linalg.LinAlgError:
+        return
+    proj = W @ Vt[:2].T          # (N, 2)
+
+    lo  = proj.min(axis=0)
+    hi  = proj.max(axis=0)
+    rng = (hi - lo).clip(min=1e-6)
+    xs  = rx + 4 + ((proj[:, 0] - lo[0]) / rng[0] * (rw - 8)).astype(int)
+    ys  = ry + 4 + ((proj[:, 1] - lo[1]) / rng[1] * (rh - 8)).astype(int)
+
+    for i in range(len(xs)):
+        lid   = int(pop['lineage_id'][i])
+        color = _LINEAGE_COLORS[lid % len(_LINEAGE_COLORS)]
+        pygame.draw.circle(surf, color, (int(xs[i]), int(ys[i])), 2)
+
+
 def _draw_stacked_area(surf, lineage_history, rect, n_lineages):
     """Stacked area chart: each lineage a coloured band, time on x-axis."""
     if len(lineage_history) < 2:
@@ -111,6 +140,12 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                 surf.blit(lbl_surf, (px + 10, y))
                 draw_sparkline(surf, data, (px + 90, y, PANEL_W - 100, 14), color, lo, hi)
                 y += 18
+        sep()
+
+        # ── PCA scatter ──────────────────────────────────────────────────────
+        txt("STRATEGY SPACE  (W_body PCA)", font, (160, 180, 220))
+        _draw_pca_scatter(surf, pop, (px + 8, y, PANEL_W - 16, 130))
+        y += 134
         sep()
 
     if hall_fame:
