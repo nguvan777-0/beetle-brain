@@ -6,7 +6,7 @@ from sim.config import WIDTH, HEIGHT, WORLD_SEED, VENT_COUNT_MIN, VENT_COUNT_MAX
 def make_vents(seed=None):
     """Generate vent positions deterministically from seed.
     Vents are kept VENT_RADIUS away from all edges so food never wraps."""
-    rng = np.random.default_rng(WORLD_SEED if seed is None else seed)
+    rng = np.random.default_rng(seed)
     n   = int(rng.integers(VENT_COUNT_MIN, VENT_COUNT_MAX + 1))
     m   = VENT_RADIUS
     return rng.uniform([m, m], [WIDTH - m, HEIGHT - m], size=(n, 2)).astype(np.float32)
