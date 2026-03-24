@@ -44,7 +44,7 @@ while True:
         break
 
     if tick >= next_sample:
-        stats.record(tick, pop)
+        stats.record(tick, pop, world['phylo'])
         next_sample += SAMPLE_EVERY
 
     if tick >= next_report:
@@ -65,7 +65,8 @@ if not extinct:
     print(f"  avg speed={pop['speed'].mean():.2f}  size={pop['size'].mean():.1f}  "
           f"drain={(0.015 * pop['size']**0.75).mean():.3f}  fov={np.degrees(pop['fov'].mean()):.0f}°")
 
-stats.finalize(tick, elapsed, pop=pop if not extinct else None, extinct=extinct)
+stats.finalize(tick, elapsed, pop=pop if not extinct else None,
+               phylo_state=world['phylo'], extinct=extinct)
 
 from report import generate
 generate(stats)
