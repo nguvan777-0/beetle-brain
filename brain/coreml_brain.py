@@ -1,0 +1,125 @@
+"""
+brain/coreml_brain.py — batched neural forward pass on ANE
+============================================================
+Compiles a CoreML MIL program that runs ALL organisms' brains
+in a single ANE call:
+
+    inputs  (MAX_POP, N_INPUTS)
+    W1      (MAX_POP, N_INPUTS, N_HIDDEN)
+    W2      (MAX_POP, N_HIDDEN, N_OUTPUTS)
+    →
+    outputs (MAX_POP, N_OUTPUTS)
+
+Variable weights per organism = each organism IS its weights.
+Falls back to numpy einsum if CoreML unavailable.
+"""
+from __future__ import annotations
+import json, time
+from pathlib import Path
+import numpy as np
+
+try:
+    import coremltools as ct
+    from coremltools.converters.mil import Builder as mb
+    _HAS_CT = True
+except ImportError:
+    _HAS_CT = False
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MODEL_PATH   = PROJECT_ROOT / "build" / "brain.mlpackage"
+META_PATH    = PROJECT_ROOT / "build" / "brain_meta.json"
+
+_model    = None
+_max_pop  = 0
+_n_in     = 0
+_n_hid    = 0
+_n_out    = 0
+_use_coreml = False
+
+
+def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bool:
+    global _model, _max_pop, _n_in, _n_hid, _n_out, _use_coreml
+
+    _max_pop = max_pop
+    _n_in    = n_inputs
+    _n_hid   = n_hidden
+    _n_out   = n_outputs
+
+    if not _HAS_CT:
+        print("[Brain] coremltools not available — numpy fallback")
+        return False
+
+    # load cache if dims match
+    if MODEL_PATH.exists() and META_PATH.exists():
+        try:
+            meta = json.loads(META_PATH.read_text())
+            if (meta.get("max_pop") == max_pop and meta.get("n_in")  == n_inputs
+                    and meta.get("n_hid") == n_hidden and meta.get("n_out") == n_outputs):
+                _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
+                _use_coreml = True
+                print(f"[Brain] Loaded cached model ({MODEL_PATH.name})")
+                return True
+        except Exception as e:
+            print(f"[Brain] Cache load failed ({e}), rebuilding...")
+
+    print(f"[Brain] Compiling batched brain model "
+          f"(pop={max_pop}, {n_inputs}→{n_hidden}→{n_outputs})...", end="", flush=True)
+    t0 = time.time()
+    try:
+        @mb.program(input_specs=[
+            mb.TensorSpec(shape=(max_pop, n_inputs)),           # x
+            mb.TensorSpec(shape=(max_pop, n_inputs,  n_hidden)),# W1
+            mb.TensorSpec(shape=(max_pop, n_hidden,  n_outputs)),# W2
+        ])
+        def brain_prog(x, W1, W2):
+            # x: (B, I) → (B, 1, I) for batched matmul
+            x_e = mb.expand_dims(x=x, axes=[-2])               # (B, 1, I)
+            h   = mb.squeeze(x=mb.matmul(x=x_e, y=W1), axes=[-2])  # (B, H)
+            h   = mb.tanh(x=h)
+            h_e = mb.expand_dims(x=h, axes=[-2])               # (B, 1, H)
+            out = mb.squeeze(x=mb.matmul(x=h_e, y=W2), axes=[-2])  # (B, O)
+            out = mb.tanh(x=out)
+            return out
+
+        model = ct.convert(brain_prog,
+                           compute_units=ct.ComputeUnit.CPU_AND_GPU,
+                           minimum_deployment_target=ct.target.macOS13)
+        MODEL_PATH.parent.mkdir(exist_ok=True)
+        model.save(str(MODEL_PATH))
+        META_PATH.write_text(json.dumps(
+            {"max_pop": max_pop, "n_in": n_inputs, "n_hid": n_hidden, "n_out": n_outputs}))
+        _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
+        _use_coreml = True
+        print(f" done ({time.time()-t0:.1f}s)")
+        return True
+    except Exception as e:
+        print(f" FAILED: {e} — numpy fallback")
+        return False
+
+
+def run_brain(x: np.ndarray, W1: np.ndarray, W2: np.ndarray) -> np.ndarray:
+    """
+    Forward pass for all organisms.
+    x:  (N, N_INPUTS)
+    W1: (N, N_INPUTS, N_HIDDEN)
+    W2: (N, N_HIDDEN, N_OUTPUTS)
+    →   (N, N_OUTPUTS)  tanh outputs
+    """
+    if _use_coreml and _model is not None:
+        # pad to max_pop if needed
+        n = x.shape[0]
+        if n < _max_pop:
+            pad = _max_pop - n
+            x  = np.vstack([x,  np.zeros((pad, _n_in),           dtype=np.float32)])
+            W1 = np.concatenate([W1, np.zeros((pad, _n_in, _n_hid),  dtype=np.float32)])
+            W2 = np.concatenate([W2, np.zeros((pad, _n_hid, _n_out), dtype=np.float32)])
+        result = _model.predict({"x": x.astype(np.float32),
+                                  "W1": W1.astype(np.float32),
+                                  "W2": W2.astype(np.float32)})
+        key = list(result.keys())[0]
+        return result[key][:n]
+
+    # numpy fallback — still fully vectorized
+    h   = np.tanh(np.einsum('bi,bih->bh', x, W1))
+    out = np.tanh(np.einsum('bh,bho->bo', h, W2))
+    return out
