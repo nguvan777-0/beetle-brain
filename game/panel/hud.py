@@ -13,6 +13,7 @@ from sim.config import (
     PRED_RATIO_MIN, PRED_RATIO_MAX, ENERGY_MAX_SCALE,
     BREED_AT_MIN, BREED_AT_MAX,
     CLONE_WITH_MIN, CLONE_WITH_MAX, DRAIN_SCALE, N_START, WIDTH, HEIGHT, VENT_RADIUS,
+    HGT_EAT_MIN, HGT_EAT_MAX, HGT_CONTACT_MIN, HGT_CONTACT_MAX,
 )
 from sim.population.genome import N_BODY
 from game.panel.sparkline import draw_sparkline
@@ -96,6 +97,8 @@ def _draw_trait_heatmap(surf, pop, rect, font_sm):
         ('mouth',  pop['mouth'],                    MOUTH_MIN,        MOUTH_MAX),
         ('emax',   ENERGY_MAX_SCALE * pop['size']**2, 0, ENERGY_MAX_SCALE * SIZE_MAX**2),
         ('pred×',  pop['pred_ratio'],               PRED_RATIO_MIN,   PRED_RATIO_MAX),
+        ('hgt-eat',pop['hgt_eat_rate'],             HGT_EAT_MIN,      HGT_EAT_MAX),
+        ('hgt-con', pop['hgt_contact_rate'],        HGT_CONTACT_MIN,  HGT_CONTACT_MAX),
     ]
 
     lbl_w  = 38
@@ -265,7 +268,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
         # ── trait heatmap ────────────────────────────────────────────────────
         txt("TRAITS  (median  |  p10–p90 band)", font, (160, 180, 220))
-        n_traits = 14
+        n_traits = 16
         hmap_h   = n_traits * 9
         _draw_trait_heatmap(surf, pop, (px + 8, y, PANEL_W - 16, hmap_h), font_sm)
         y += hmap_h + 4
