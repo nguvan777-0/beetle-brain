@@ -17,10 +17,11 @@ def make_pop(n, rng):
         'energy':        np.full(n, ENERGY_START, dtype=np.float32),
         'W_body': W_body, 'W1': W1, 'W2': W2,
         **t,
-        'generation': np.zeros(n, dtype=np.int32),
-        'age':        np.zeros(n, dtype=np.int32),
-        'eaten':      np.zeros(n, dtype=np.int32),
-        'h_state':    np.zeros((n, N_HIDDEN), dtype=np.float32),
+        'generation':  np.zeros(n, dtype=np.int32),
+        'age':         np.zeros(n, dtype=np.int32),
+        'eaten':       np.zeros(n, dtype=np.int32),
+        'h_state':     np.zeros((n, N_HIDDEN), dtype=np.float32),
+        'lineage_id':  np.arange(n, dtype=np.int32),
     }
 
 

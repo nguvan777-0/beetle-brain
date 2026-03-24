@@ -33,8 +33,9 @@ def clone_batch(pop, idx, rng):
         'energy':     pop['clone_with'][idx].copy(),
         'W_body': W_body, 'W1': W1, 'W2': W2,
         **t,
-        'generation': (pop['generation'][idx] + 1).astype(np.int32),
-        'age':        np.zeros(n, dtype=np.int32),
-        'eaten':      np.zeros(n, dtype=np.int32),
-        'h_state':    pop['h_state'][idx] * pop['epigenetic'][idx, None],
+        'generation':  (pop['generation'][idx] + 1).astype(np.int32),
+        'age':         np.zeros(n, dtype=np.int32),
+        'eaten':       np.zeros(n, dtype=np.int32),
+        'h_state':     pop['h_state'][idx] * pop['epigenetic'][idx, None],
+        'lineage_id':  pop['lineage_id'][idx].copy(),
     }

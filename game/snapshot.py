@@ -15,6 +15,7 @@ def save_snapshot(pop, food, vents, tick, history, hall_fame):
         W_body=pop['W_body'], W1=pop['W1'], W2=pop['W2'],
         h_state=pop['h_state'],
         generation=pop['generation'], age=pop['age'], eaten=pop['eaten'],
+        lineage_id=pop['lineage_id'],
         food=food, vents=vents, tick=np.array([tick], dtype=np.int32),
         hist=hist_arr)
     print(f"[saved] {len(pop['x'])} organisms → {SNAPSHOT_PATH}  (tick {tick})")
@@ -35,11 +36,13 @@ def load_snapshot(rng):
         'W1':         d['W1'].astype(np.float32),
         'W2':         d['W2'].astype(np.float32),
         **t,
-        'generation': d['generation'].astype(np.int32),
-        'age':        d['age'].astype(np.int32),
-        'eaten':      d['eaten'].astype(np.int32),
-        'h_state':    (d['h_state'].astype(np.float32) if 'h_state' in d
-                       else np.zeros((len(d['x']), N_HIDDEN), dtype=np.float32)),
+        'generation':  d['generation'].astype(np.int32),
+        'age':         d['age'].astype(np.int32),
+        'eaten':       d['eaten'].astype(np.int32),
+        'h_state':     (d['h_state'].astype(np.float32) if 'h_state' in d
+                        else np.zeros((len(d['x']), N_HIDDEN), dtype=np.float32)),
+        'lineage_id':  (d['lineage_id'].astype(np.int32) if 'lineage_id' in d
+                        else np.zeros(len(d['x']), dtype=np.int32)),
     }
     vents   = d['vents'].astype(np.float32) if 'vents' in d else make_vents()
     history = [tuple(row) for row in d['hist']] if d['hist'].ndim == 2 and len(d['hist']) else []
