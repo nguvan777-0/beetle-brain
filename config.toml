@@ -40,8 +40,6 @@ ray_min     = 30.0
 ray_max     = 180.0
 size_min    = 3.0
 size_max    = 9.0
-drain_min   = 0.02      # energy drained per tick just existing
-drain_max   = 0.18
 
 [brain]
 n_rays      = 7         # number of vision rays
@@ -69,6 +67,7 @@ detect_bonus    = 9.0   # max extra predation radius for fully bright organism
                         # (scaled by brightness 0-1, added to size)
 
 [metabolism]
+drain_scale     = 0.015   # basal drain = drain_scale × size^0.75  (Kleiber's law)
 size_tax        = 0.0003  # energy -= size² × size_tax per tick  (big = expensive)
 speed_tax       = 0.004   # energy -= speed² × speed_tax per tick (fast = expensive)
 age_tax         = 0.0005  # energy *= (1 - age_tax) per tick      (entropy / lifespan cap)

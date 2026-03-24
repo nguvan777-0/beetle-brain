@@ -4,7 +4,7 @@ from sim.config import (
     WIDTH, HEIGHT, N_FOOD, MAX_POP,
     ENERGY_FOOD,
     AGING_ENABLED,
-    SIZE_TAX, SPEED_TAX, AGE_TAX,
+    DRAIN_SCALE, SIZE_TAX, SPEED_TAX, AGE_TAX,
 )
 from sim.vents import refill_vents
 from sim.grid.painter import paint_grid
@@ -35,7 +35,8 @@ def tick(pop, food, vents, rng):
     pop['y']      = (pop['y'] + np.sin(pop['angle']) * speeds) % HEIGHT
 
     # ── metabolic drain ──────────────────────────────────────────────────────
-    pop['energy'] -= (pop['drain']
+    drain = DRAIN_SCALE * pop['size'] ** 0.75   # Kleiber's law
+    pop['energy'] -= (drain
                       + speeds**2      * SPEED_TAX
                       + pop['size']**2 * SIZE_TAX)
     pop['energy'] *= (1.0 - AGE_TAX)
