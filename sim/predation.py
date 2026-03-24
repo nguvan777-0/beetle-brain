@@ -14,7 +14,7 @@ def predation(pop, idx_grid):
     """
     N = len(pop['x'])
     if N <= 1:
-        return np.zeros(N, dtype=bool), np.zeros(N, dtype=np.float32)
+        return np.zeros(N, dtype=bool), np.zeros(N, dtype=np.float32), np.empty(0, dtype=np.int32), np.empty(0, dtype=np.int32)
 
     brightness = (pop['r'].astype(np.float32) + pop['g'] + pop['b']) / (3.0 * 255.0)
     detect_r   = pop['size'] + (brightness * CAMO_BONUS if CAMO_ENABLED else 0.0)
