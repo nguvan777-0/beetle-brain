@@ -230,7 +230,10 @@ def tick(pop, food, rng):
         org_pos  = np.stack([pop['x'], pop['y']], axis=1)
         dist_o   = np.linalg.norm(org_pos[None,:,:] - org_pos[:,None,:], axis=2)  # (N, N)
         np.fill_diagonal(dist_o, np.inf)
-        touch    = dist_o < (pop['size'][:, None] + pop['size'][None, :])          # (N, N)
+        # bright prey are detectable from further away — camouflage pressure
+        brightness = (pop['r'].astype(np.float32) + pop['g'] + pop['b']) / (3.0 * 255.0)  # (N,) 0-1
+        detect_r   = pop['size'] + brightness * SIZE_MAX                                   # (N,) bigger when bright
+        touch    = dist_o < (pop['size'][:, None] + detect_r[None, :])                    # (N, N)
         bigger   = pop['size'][:, None] > pop['size'][None, :] * 1.25             # (N, N)
         kills    = touch & bigger                                                   # (N, N)
         killed   = kills.any(axis=0)                                               # (N,)
