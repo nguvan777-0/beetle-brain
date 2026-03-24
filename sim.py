@@ -62,6 +62,10 @@ EPIGENETIC      = _cfg["evolution"]["epigenetic"]
 AGING_ENABLED   = _cfg["aging"]["enabled"]
 WEIGHT_DECAY    = _cfg["aging"]["weight_decay"]
 
+SIZE_TAX        = _cfg["metabolism"]["size_tax"]
+SPEED_TAX       = _cfg["metabolism"]["speed_tax"]
+AGE_TAX         = _cfg["metabolism"]["age_tax"]
+
 CAMO_ENABLED    = _cfg["camouflage"]["enabled"]
 CAMO_BONUS      = _cfg["camouflage"]["detect_bonus"]
 
@@ -258,7 +262,11 @@ def _predation(pop, idx_grid):
     bigger   = pop['size'][:, None] > pop['size'][j_safe] * 1.25   # (N, 441)
     kills    = valid & in_range & bigger                            # (N, 441)
 
-    prey_gain = (kills * pop['energy'][j_safe]).sum(axis=1) * 0.7  # (N,)
+    # count how many predators kill each prey — split energy among them
+    prey_kill_counts = np.zeros(N, dtype=np.float32)
+    np.add.at(prey_kill_counts, j_idx[kills], 1.0)                  # (N,) kills per prey
+    counts_per_slot  = np.where(kills, prey_kill_counts[j_safe].clip(min=1), 1.0)  # (N, 441)
+    prey_gain = (kills * pop['energy'][j_safe] / counts_per_slot).sum(axis=1) * 0.7  # (N,)
 
     killed = np.zeros(N, dtype=bool)
     killed[j_idx[kills]] = True
@@ -284,7 +292,10 @@ def tick(pop, food, rng):
     pop['angle'] += turns
     pop['x']      = (pop['x'] + np.cos(pop['angle']) * speeds) % WIDTH
     pop['y']      = (pop['y'] + np.sin(pop['angle']) * speeds) % HEIGHT
-    pop['energy'] -= pop['drain'] + speeds * 0.01 + pop['size'] * 0.002
+    pop['energy'] -= (pop['drain']
+                     + speeds**2      * SPEED_TAX   # fast = expensive (quadratic)
+                     + pop['size']**2 * SIZE_TAX)   # big  = expensive (quadratic)
+    pop['energy'] *= (1.0 - AGE_TAX)               # entropy: compounds each tick
     pop['age']    += 1
 
     # ── eat food ────────────────────────────────────────────────────────────
@@ -292,8 +303,10 @@ def tick(pop, food, rng):
         org_pos  = np.stack([pop['x'], pop['y']], axis=1)   # (N, 2)
         dist_f   = np.linalg.norm(food[None,:,:] - org_pos[:,None,:], axis=2)  # (N, M)
         eat_mask = dist_f < (pop['size'][:, None] + 3.0)                       # (N, M)
-        eaten_food = eat_mask.any(axis=0)                   # (M,) — food eaten by anyone
-        gain_per   = eat_mask.sum(axis=1).astype(np.float32) * ENERGY_FOOD
+        eaten_food   = eat_mask.any(axis=0)                              # (M,) — food eaten by anyone
+        eaters_count = eat_mask.sum(axis=0).clip(min=1).astype(np.float32)  # (M,) — how many share each pellet
+        share        = ENERGY_FOOD / eaters_count                            # (M,) — energy per eater
+        gain_per     = (eat_mask.astype(np.float32) * share[None, :]).sum(axis=1)  # (N,)
         pop['energy'] = np.minimum(ENERGY_MAX, pop['energy'] + gain_per)
         pop['eaten'] += eat_mask.any(axis=1).astype(np.int32)
         food = food[~eaten_food]
@@ -328,6 +341,10 @@ def tick(pop, food, rng):
         children   = _clone_batch(pop, parent_idx, rng)
         pop        = _filter(pop, alive)
         pop        = _concat(pop, children)
+        # hard ceiling — trim oldest first (lowest generation) if over cap
+        if len(pop['x']) > MAX_POP:
+            keep = np.argsort(-pop['generation'])[:MAX_POP]
+            pop  = _filter(pop, keep)
     else:
         pop = _filter(pop, alive)
 
