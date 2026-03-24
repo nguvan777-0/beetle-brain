@@ -10,7 +10,7 @@ The organism is called a **wight**. 213 floats per wight. 9 body weights, 180 fo
 
 Starts with a single wight. Everything else emerges.
 
-Organisms ray-cast through a rasterized world grid — O(1) per organism regardless of population size. All 300 brains run in a single batched CoreML call (weights passed as runtime inputs, routed to GPU or ANE by the OS).
+Wights ray-cast through a rasterized world grid — O(N) total regardless of population size. Sensing and predation both use the same grid: sensing ray-marches through it, predation reads a fixed 21×21 patch around each wight. All brains run in a single batched CoreML call (weights passed as runtime inputs, routed to GPU or ANE by the OS).
 
 
 ## How evolution works
