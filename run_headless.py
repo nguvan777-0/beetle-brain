@@ -14,9 +14,9 @@ REPORT_EVERY = 500
 
 init_ane()
 
-rng       = np.random.default_rng()
-pop, food = new_world(rng)
-tick      = 0
+rng            = np.random.default_rng()
+pop, food, vents = new_world(rng)
+tick           = 0
 
 print(f"{'tick':>8} {'pop':>5} {'maxGen':>7} {'maxAge':>7} {'maxAte':>7} "
       f"{'avgSpd':>7} {'avgSz':>6} {'avgDrn':>7}  elapsed")
@@ -30,7 +30,7 @@ while True:
     if elapsed >= DURATION:
         break
 
-    pop, food = sim_tick(pop, food, rng)
+    pop, food = sim_tick(pop, food, vents, rng)
     tick += 1
 
     if len(pop['x']) == 0:
