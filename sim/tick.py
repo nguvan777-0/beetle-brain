@@ -15,8 +15,12 @@ from sim.population.ops import filter_pop, concat_pop
 from brain.coreml_brain import run_brain
 
 
-def tick(pop, food, vents, rng):
-    energy_max = ENERGY_MAX_SCALE * pop['size'] ** 2   # storage ∝ volume
+def tick(world, rng):
+    pop         = world['pop']
+    food        = world['food']
+    vents       = world['vents']
+    phylo_state = world['phylo']
+    energy_max  = ENERGY_MAX_SCALE * pop['size'] ** 2   # storage ∝ volume
 
     # ── sense ────────────────────────────────────────────────────────────────
     grid, idx_grid = paint_grid(pop, food)
@@ -67,7 +71,7 @@ def tick(pop, food, vents, rng):
     pop['energy'] = np.where(can_breed, pop['clone_with'], pop['energy'])
 
     if can_breed.any():
-        children = clone_batch(pop, np.where(can_breed)[0], rng)
+        children = clone_batch(pop, np.where(can_breed)[0], rng, phylo_state)
         pop      = filter_pop(pop, alive)
         pop      = concat_pop(pop, children)
         if len(pop['x']) > MAX_POP:
@@ -79,4 +83,6 @@ def tick(pop, food, vents, rng):
     # ── refill each vent independently ───────────────────────────────────────
     food = refill_vents(food, vents, rng, N_FOOD // len(vents))
 
-    return pop, food
+    world['pop']  = pop
+    world['food'] = food
+    return world
