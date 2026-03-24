@@ -99,6 +99,7 @@ def _make_pop(n, rng):
         'generation':np.zeros(n, dtype=np.int32),
         'age':       np.zeros(n, dtype=np.int32),
         'eaten':     np.zeros(n, dtype=np.int32),
+        'h_state':   np.zeros((n, N_HIDDEN), dtype=np.float32),
     }
 
 def new_world(rng=None):
@@ -202,8 +203,9 @@ def tick(pop, food, rng):
     grid       = _paint_grid(pop, food)
     inputs     = _sense(pop, grid)
 
-    # ── brain forward pass (ANE) ────────────────────────────────────────────
-    out        = run_brain(inputs, pop['W1'], pop['W2'])  # (N, 2)
+    # ── brain forward pass (recurrent) ──────────────────────────────────────
+    h_new, out       = run_brain(inputs, pop['W1'], pop['W2'], pop['h_state'])
+    pop['h_state']   = h_new                              # store hidden state for next tick
     turns      = out[:, 0] * pop['turn_s']                # (N,)
     speeds     = (out[:, 1] + 1.0) * 0.5 * pop['speed']  # (N,)
 
@@ -315,4 +317,5 @@ def _clone_batch(pop, idx, rng):
         'generation':(pop['generation'][idx] + 1).astype(np.int32),
         'age':       np.zeros(n, dtype=np.int32),
         'eaten':     np.zeros(n, dtype=np.int32),
+        'h_state':   pop['h_state'][idx] * 0.25,  # 25% epigenetic inheritance — born pre-shaped by parent's experience
     }

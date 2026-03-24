@@ -1,16 +1,21 @@
 """
-brain/coreml_brain.py — batched neural forward pass on ANE
-============================================================
-Compiles a CoreML MIL program that runs ALL organisms' brains
-in a single ANE call:
+brain/coreml_brain.py — batched recurrent neural forward pass
+==============================================================
+Elman RNN — each organism carries a hidden state across ticks:
 
     inputs  (MAX_POP, N_INPUTS)
     W1      (MAX_POP, N_INPUTS, N_HIDDEN)
     W2      (MAX_POP, N_HIDDEN, N_OUTPUTS)
+    h_prev  (MAX_POP, N_HIDDEN)            ← recurrent state
     →
-    outputs (MAX_POP, N_OUTPUTS)
+    h_new   (MAX_POP, N_HIDDEN)            ← stored back into pop
+    out     (MAX_POP, N_OUTPUTS)
 
-Variable weights per organism = each organism IS its weights.
+h_new = tanh(inputs @ W1 + h_prev)   recurrent connection
+out   = tanh(h_new @ W2)
+
+The weights evolve what to write into h and how to read from it.
+Fear, momentum, hunger anticipation — whatever helps survival emerges.
 Falls back to numpy einsum if CoreML unavailable.
 """
 from __future__ import annotations
@@ -29,11 +34,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH   = PROJECT_ROOT / "build" / "brain.mlpackage"
 META_PATH    = PROJECT_ROOT / "build" / "brain_meta.json"
 
-_model    = None
-_max_pop  = 0
-_n_in     = 0
-_n_hid    = 0
-_n_out    = 0
+_model      = None
+_max_pop    = 0
+_n_in       = 0
+_n_hid      = 0
+_n_out      = 0
 _use_coreml = False
 
 
@@ -49,12 +54,12 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
         print("[Brain] coremltools not available — numpy fallback")
         return False
 
-    # load cache if dims match
     if MODEL_PATH.exists() and META_PATH.exists():
         try:
             meta = json.loads(META_PATH.read_text())
             if (meta.get("max_pop") == max_pop and meta.get("n_in")  == n_inputs
-                    and meta.get("n_hid") == n_hidden and meta.get("n_out") == n_outputs):
+                    and meta.get("n_hid") == n_hidden and meta.get("n_out") == n_outputs
+                    and meta.get("recurrent") == True):
                 _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.ALL)
                 _use_coreml = True
                 print(f"[Brain] Loaded cached model ({MODEL_PATH.name})")
@@ -62,24 +67,25 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
         except Exception as e:
             print(f"[Brain] Cache load failed ({e}), rebuilding...")
 
-    print(f"[Brain] Compiling batched brain model "
+    print(f"[Brain] Compiling recurrent brain model "
           f"(pop={max_pop}, {n_inputs}→{n_hidden}→{n_outputs})...", end="", flush=True)
     t0 = time.time()
     try:
         @mb.program(input_specs=[
-            mb.TensorSpec(shape=(max_pop, n_inputs)),           # x
-            mb.TensorSpec(shape=(max_pop, n_inputs,  n_hidden)),# W1
+            mb.TensorSpec(shape=(max_pop, n_inputs)),            # x
+            mb.TensorSpec(shape=(max_pop, n_inputs,  n_hidden)), # W1
             mb.TensorSpec(shape=(max_pop, n_hidden,  n_outputs)),# W2
+            mb.TensorSpec(shape=(max_pop, n_hidden)),            # h_prev
         ])
-        def brain_prog(x, W1, W2):
+        def brain_prog(x, W1, W2, h_prev):
             # x: (B, I) → (B, 1, I) for batched matmul
-            x_e = mb.expand_dims(x=x, axes=[-2])               # (B, 1, I)
-            h   = mb.squeeze(x=mb.matmul(x=x_e, y=W1), axes=[-2])  # (B, H)
-            h   = mb.tanh(x=h)
-            h_e = mb.expand_dims(x=h, axes=[-2])               # (B, 1, H)
-            out = mb.squeeze(x=mb.matmul(x=h_e, y=W2), axes=[-2])  # (B, O)
-            out = mb.tanh(x=out)
-            return out
+            x_e   = mb.expand_dims(x=x, axes=[-2])                        # (B, 1, I)
+            h_raw = mb.squeeze(x=mb.matmul(x=x_e, y=W1), axes=[-2])      # (B, H)
+            h_new = mb.tanh(x=mb.add(x=h_raw, y=h_prev), name='h_new')   # (B, H) recurrent
+            h_e   = mb.expand_dims(x=h_new, axes=[-2])                    # (B, 1, H)
+            out   = mb.squeeze(x=mb.matmul(x=h_e, y=W2), axes=[-2])      # (B, O)
+            out   = mb.tanh(x=out, name='out')
+            return h_new, out
 
         model = ct.convert(brain_prog,
                            compute_units=ct.ComputeUnit.ALL,
@@ -87,7 +93,8 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
         MODEL_PATH.parent.mkdir(exist_ok=True)
         model.save(str(MODEL_PATH))
         META_PATH.write_text(json.dumps(
-            {"max_pop": max_pop, "n_in": n_inputs, "n_hid": n_hidden, "n_out": n_outputs}))
+            {"max_pop": max_pop, "n_in": n_inputs, "n_hid": n_hidden,
+             "n_out": n_outputs, "recurrent": True}))
         _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.ALL)
         _use_coreml = True
         print(f" done ({time.time()-t0:.1f}s)")
@@ -97,29 +104,31 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
         return False
 
 
-def run_brain(x: np.ndarray, W1: np.ndarray, W2: np.ndarray) -> np.ndarray:
+def run_brain(x: np.ndarray, W1: np.ndarray, W2: np.ndarray,
+              h_prev: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
-    Forward pass for all organisms.
-    x:  (N, N_INPUTS)
-    W1: (N, N_INPUTS, N_HIDDEN)
-    W2: (N, N_HIDDEN, N_OUTPUTS)
-    →   (N, N_OUTPUTS)  tanh outputs
+    Recurrent forward pass for all organisms.
+    x:      (N, N_INPUTS)
+    W1:     (N, N_INPUTS, N_HIDDEN)
+    W2:     (N, N_HIDDEN, N_OUTPUTS)
+    h_prev: (N, N_HIDDEN)
+    →  h_new (N, N_HIDDEN),  out (N, N_OUTPUTS)
     """
     if _use_coreml and _model is not None:
-        # pad to max_pop if needed
         n = x.shape[0]
         if n < _max_pop:
             pad = _max_pop - n
-            x  = np.vstack([x,  np.zeros((pad, _n_in),           dtype=np.float32)])
-            W1 = np.concatenate([W1, np.zeros((pad, _n_in, _n_hid),  dtype=np.float32)])
-            W2 = np.concatenate([W2, np.zeros((pad, _n_hid, _n_out), dtype=np.float32)])
-        result = _model.predict({"x": x.astype(np.float32),
-                                  "W1": W1.astype(np.float32),
-                                  "W2": W2.astype(np.float32)})
-        key = list(result.keys())[0]
-        return result[key][:n]
+            x      = np.vstack([x,      np.zeros((pad, _n_in),           dtype=np.float32)])
+            W1     = np.concatenate([W1, np.zeros((pad, _n_in, _n_hid),  dtype=np.float32)])
+            W2     = np.concatenate([W2, np.zeros((pad, _n_hid, _n_out), dtype=np.float32)])
+            h_prev = np.vstack([h_prev,  np.zeros((pad, _n_hid),         dtype=np.float32)])
+        result = _model.predict({"x":      x.astype(np.float32),
+                                  "W1":     W1.astype(np.float32),
+                                  "W2":     W2.astype(np.float32),
+                                  "h_prev": h_prev.astype(np.float32)})
+        return result['h_new'][:n], result['out'][:n]
 
-    # numpy fallback — still fully vectorized
-    h   = np.tanh(np.einsum('bi,bih->bh', x, W1))
-    out = np.tanh(np.einsum('bh,bho->bo', h, W2))
-    return out
+    # numpy fallback
+    h_new = np.tanh(np.einsum('bi,bih->bh', x, W1) + h_prev)
+    out   = np.tanh(np.einsum('bh,bho->bo', h_new, W2))
+    return h_new, out
