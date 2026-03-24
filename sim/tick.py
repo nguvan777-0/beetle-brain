@@ -6,6 +6,7 @@ from sim.config import (
     AGING_ENABLED,
     SIZE_TAX, SPEED_TAX, AGE_TAX,
 )
+from sim.vents import spawn_near_vents
 from sim.grid.painter import paint_grid
 from sim.sensing import sense
 from sim.predation import predation
@@ -15,7 +16,7 @@ from sim.population.ops import filter_pop, concat_pop
 from brain.coreml_brain import run_brain
 
 
-def tick(pop, food, rng):
+def tick(pop, food, vents, rng):
     energy_max = pop['energy_max']   # per-wight max energy storage
 
     # ── sense ────────────────────────────────────────────────────────────────
@@ -83,10 +84,10 @@ def tick(pop, food, rng):
     else:
         pop = filter_pop(pop, alive)
 
-    # ── respawn food ─────────────────────────────────────────────────────────
+    # ── respawn food at vents ─────────────────────────────────────────────────
     short = N_FOOD - len(food)
     if short > 0:
-        new_f = rng.uniform(0, [WIDTH, HEIGHT], size=(short, 2)).astype(np.float32)
+        new_f = spawn_near_vents(short, vents, rng)
         food  = np.vstack([food, new_f]) if len(food) else new_f
 
     return pop, food

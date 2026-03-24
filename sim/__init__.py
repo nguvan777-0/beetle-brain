@@ -1,6 +1,7 @@
 """Public API for the simulation package."""
 from sim.config import (
     WIDTH, HEIGHT, N_FOOD, N_START, MAX_POP,
+    WORLD_SEED, VENT_COUNT_MIN, VENT_COUNT_MAX, VENT_RADIUS,
     SPEED_MIN, SPEED_MAX, FOV_MIN, FOV_MAX,
     RAY_MIN, RAY_MAX, SIZE_MIN, SIZE_MAX,
     DRAIN_MIN, DRAIN_MAX,
