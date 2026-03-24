@@ -14,8 +14,6 @@ Each wight is ~213 floats: 18 body weights, 180 for the first brain layer, 24 fo
 
 Wights ray-cast through a rasterized world grid — O(N) total regardless of population size. Sensing and predation both use the same grid: sensing ray-marches through it, predation reads a fixed patch around each wight. All brains run in a single batched CoreML call (weights passed as runtime inputs, routed to GPU or ANE by the OS).
 
-Wights ray-cast through a rasterized world grid — O(N) total regardless of population size. Sensing and predation both use the same grid: sensing ray-marches through it, predation reads a fixed patch around each wight. All brains run in a single batched CoreML call (weights passed as runtime inputs, routed to GPU or ANE by the OS).
-
 ## Genome: 18 evolved traits
 
 All traits are decoded from `W_body` (18 floats) via sigmoid into their ranges. `energy_max` and `drain` are derived from `size` (not genes).
@@ -47,7 +45,7 @@ All traits are decoded from `W_body` (18 floats) via sigmoid into their ranges. 
 - on proximity contact, roll against `hgt_contact_rate` → same crossover with a neighbor
 - hit `breed_at` energy → clone + mutate all weights (W_body, W1, W2), reset to `clone_with`
 - hit 0 energy → die
-- metabolic drain: `DRAIN_SCALE × size^0.75 + speed² × SPEED_TAX + size² × SIZE_TAX` per tick
+- metabolic drain: `DRAIN_SCALE × size^0.75 + speed² × SPEED_TAX + size² × SIZE_TAX + ray_len × fov × SENSING_TAX` per tick
 - population capped at 4096 (keeps youngest generations on overflow)
 - extinction → game over screen with restart
 
@@ -63,6 +61,7 @@ sim/                 pure numpy — tick(world, rng) → world, no globals
   hgt.py             horizontal gene transfer (eat + contact crossover)
   evolution.py       clone_batch with per-wight mutation
   phylo.py           ring-buffer ancestry + hue inheritance
+  stats.py           trait sampling + hall of fame for post-run report
   grid/
     constants.py     grid geometry
     painter.py       rasterize world to grid + idx_grid
@@ -81,6 +80,7 @@ game/                pure pygame — no sim logic
     sparkline.py     population history graph
 brain/
   coreml_brain.py    batched Elman RNN via CoreML (GPU/ANE)
+report.py            self-contained plotly HTML report (not committed)
 ```
 
 ## Run
@@ -94,12 +94,22 @@ First run compiles the CoreML brain model (~1s), cached to `build/brain.mlpackag
 **Headless** (no pygame needed):
 
 ```bash
-uv run --with numpy --with coremltools python run_headless.py 30
+uv run --with numpy --with coremltools --with plotly python run_headless.py 30
 ```
 
-Runs for 30 seconds at max speed, printing population stats every 500 ticks.
+Runs for 30 seconds at max speed, printing population stats every 500 ticks. Writes `report.html` on completion.
 
-**Keys:** `SPACE` cycle speed (1×/5×/20×/headless) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves)
+**Keys:** `SPACE` cycle speed (1×/5×/20×/headless) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
+
+## run report
+
+Both the headless run and the pygame sim generate `report.html` on exit (ESC, quit, or extinction). Open it in any browser — fully offline, no CDN.
+
+- **lineage river** — stacked area per lineage colored by phylo hue. forks, takeovers, and extinctions visible at a glance
+- **genome heatmap** — all 18 genes × time, normalized within each gene's range. selection vs neutral drift in one view
+- **phase scatter** — size vs pred_ratio at the final snapshot, colored by lineage, sized by speed
+- **drain breakdown** — Kleiber + speed² + size² + sensing cost, stacked per tick
+- **hall of fame** — longest-lived, most kills, highest generation with full trait snapshot and lineage hue
 
 ## Tuning the world
 
