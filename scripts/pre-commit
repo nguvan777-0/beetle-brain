@@ -4,7 +4,7 @@ set -e
 echo "[pre-commit] running smoke tests..."
 
 echo "[pre-commit] 1/2 headless (1s)..."
-uv run --with coremltools --with numpy python run_headless.py 1
+uv run --with coremltools --with numpy python world.py 1
 
 echo "[pre-commit] 2/2 pygame (10 ticks, dummy display)..."
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy uv run --with coremltools --with numpy --with pygame python -c "
