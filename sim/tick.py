@@ -10,6 +10,7 @@ from sim.grid.painter import paint_grid
 from sim.sensing import sense
 from sim.predation import predation
 from sim.evolution import clone_batch
+from sim.hgt import eat_hgt, contact_hgt
 from sim.population.genome import decode
 from sim.population.ops import filter_pop, concat_pop
 from brain.coreml_brain import run_brain
@@ -59,9 +60,13 @@ def tick(world, rng):
         food = food[~eaten_food]
 
     # ── predation ────────────────────────────────────────────────────────────
-    killed, prey_gain = predation(pop, idx_grid)
+    killed, prey_gain, pred_idx, prey_idx = predation(pop, idx_grid)
     pop['energy'] = np.minimum(energy_max, pop['energy'] + prey_gain)
     pop['eaten'] += (prey_gain > 0).astype(np.int32)
+
+    # ── horizontal gene transfer ──────────────────────────────────────────────
+    eat_hgt(pop, pred_idx, prey_idx, rng)
+    contact_hgt(pop, idx_grid, rng)
 
     # ── death ────────────────────────────────────────────────────────────────
     alive = (pop['energy'] > 0) & (~killed)

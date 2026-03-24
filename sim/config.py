@@ -60,3 +60,8 @@ AGE_TAX         = _cfg["metabolism"]["age_tax"]
 
 CAMO_ENABLED    = _cfg["camouflage"]["enabled"]
 CAMO_BONUS      = _cfg["camouflage"]["detect_bonus"]
+
+HGT_EAT_MIN     = _cfg["hgt"]["eat_rate_min"]
+HGT_EAT_MAX     = _cfg["hgt"]["eat_rate_max"]
+HGT_CONTACT_MIN = _cfg["hgt"]["contact_rate_min"]
+HGT_CONTACT_MAX = _cfg["hgt"]["contact_rate_max"]
