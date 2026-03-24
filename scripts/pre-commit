@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -e
+
+echo "[pre-commit] running smoke tests..."
+
+echo "[pre-commit] 1/2 headless (1s)..."
+uv run --with coremltools --with numpy python run_headless.py 1
+
+echo "[pre-commit] 2/2 pygame (10 ticks, dummy display)..."
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy uv run --with coremltools --with numpy --with pygame python -c "
+import numpy as np
+import sim
+from sim import new_world, tick as sim_tick, init_ane
+import pygame
+pygame.init()
+import os
+os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+rng = np.random.default_rng(42)
+world = new_world(rng)
+for _ in range(10):
+    world = sim_tick(world, rng)
+print('[ok] pygame smoke: 10 ticks')
+"
+
+echo "[pre-commit] all smoke tests passed"
