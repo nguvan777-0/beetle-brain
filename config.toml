@@ -12,7 +12,7 @@ n_start     = 1          # the first wight
 [energy]
 start       = 120.0
 max         = 200.0
-food        = 55.0      # energy gained per food eaten
+food        = 12.0      # energy gained per food eaten
 breed_at    = 160.0     # energy threshold to clone
 clone_with  = 80.0      # energy child and parent get after cloning
 
@@ -49,3 +49,8 @@ weight_decay    = 0.00002   # weights multiply by (1 - decay) each tick
 enabled         = true
 detect_bonus    = 9.0   # max extra predation radius for fully bright organism
                         # (scaled by brightness 0-1, added to size)
+
+[metabolism]
+size_tax        = 0.0003  # energy -= size² × size_tax per tick  (big = expensive)
+speed_tax       = 0.004   # energy -= speed² × speed_tax per tick (fast = expensive)
+age_tax         = 0.0005  # energy *= (1 - age_tax) per tick      (entropy / lifespan cap)
