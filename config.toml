@@ -1,0 +1,51 @@
+# beetle-brain configuration
+# edit anything here — restart the sim to apply
+# inspired by the eyes of the Cambrian
+
+[world]
+width       = 900
+height      = 900
+food_count  = 200
+max_pop     = 300
+n_start     = 80        # organisms at world creation
+
+[energy]
+start       = 120.0
+max         = 200.0
+food        = 55.0      # energy gained per food eaten
+breed_at    = 160.0     # energy threshold to clone
+clone_with  = 80.0      # energy child and parent get after cloning
+
+[traits]
+# each trait is decoded from W_body via sigmoid into [min, max]
+speed_min   = 0.3
+speed_max   = 4.0
+fov_min     = 0.47      # radians (~27 deg)
+fov_max     = 2.83      # radians (~162 deg)
+ray_min     = 30.0
+ray_max     = 180.0
+size_min    = 3.0
+size_max    = 9.0
+drain_min   = 0.02      # energy drained per tick just existing
+drain_max   = 0.18
+
+[brain]
+n_rays      = 7         # number of vision rays
+n_hidden    = 12        # hidden layer size (also h_state size)
+n_outputs   = 2         # turn, speed
+
+[evolution]
+mutation_rate   = 0.12  # probability any single weight mutates
+mutation_scale  = 0.15  # magnitude of mutation noise
+epigenetic      = 0.25  # fraction of parent h_state inherited at birth
+
+[aging]
+enabled         = true
+weight_decay    = 0.00002   # weights multiply by (1 - decay) each tick
+                            # at decay=0.00002: ~86% remain after 8000 ticks
+                            # lower = longer lived,  higher = faster aging
+
+[camouflage]
+enabled         = true
+detect_bonus    = 9.0   # max extra predation radius for fully bright organism
+                        # (scaled by brightness 0-1, added to size)
