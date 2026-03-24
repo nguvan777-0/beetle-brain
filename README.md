@@ -1,6 +1,6 @@
 # beetle-brain
 
-Neuroevolution sim where the organism is its weights, accelerated via CoreML on Apple Silicon (numpy fallback included). We're evolving weights called wights. Each wight's brain is a Recurrent Neural Network (RNN) — inherited at birth, mutated like the body, shaped entirely by selection.
+Neuroevolution sim where the organism is its weights, accelerated via CoreML on Apple Silicon (numpy fallback included). We're evolving weights called wights. Each wight's brain is a Recurrent Neural Network (RNN) — hidden state carries across ticks, enabling memory to evolve.
 
 - **Encoded** (genome, evolved): speed, fov, size, color, mouth, pred_ratio, mutation rates, HGT rates, epigenetic carry-over — 18 floats decoded via sigmoid.
 - **Derived** (our rules, not evolved): `energy_max = 10 × size²` (storage ∝ volume), `drain = 0.015 × size^0.75` (Kleiber's law).
@@ -95,7 +95,9 @@ Without pygame — runs headless at max speed for N seconds (default 30):
 uv run --with numpy --with coremltools --with plotly python world.py 60
 ```
 
-`plotly` is optional — drop it and the report is skipped. First run compiles the CoreML brain model (~1s), cached to `build/brain.mlpackage`.
+`plotly` is optional — drop it and the report is skipped. `coremltools` is optional — drop it and the brain runs on numpy instead.
+
+First run compiles the CoreML model (~1s), cached to `build/brain.mlpackage`.
 
 **Keys:** `SPACE` cycle speed (1×/5×/20×/headless) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
