@@ -172,6 +172,7 @@ def save_snapshot(pop, food, tick, history, hall_fame):
     np.savez_compressed(SNAPSHOT_PATH,
         x=pop['x'], y=pop['y'], angle=pop['angle'], energy=pop['energy'],
         W_body=pop['W_body'], W1=pop['W1'], W2=pop['W2'],
+        h_state=pop['h_state'],
         generation=pop['generation'], age=pop['age'], eaten=pop['eaten'],
         food=food, tick=np.array([tick], dtype=np.int32),
         hist=hist_arr)
@@ -202,6 +203,7 @@ def load_snapshot(rng):
         'generation': d['generation'].astype(np.int32),
         'age':        d['age'].astype(np.int32),
         'eaten':      d['eaten'].astype(np.int32),
+        'h_state':    d['h_state'].astype(np.float32) if 'h_state' in d else np.zeros((len(d['x']), sim.N_HIDDEN), dtype=np.float32),
     }
     food    = d['food']
     tick    = int(d['tick'][0])
