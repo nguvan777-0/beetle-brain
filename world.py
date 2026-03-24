@@ -264,6 +264,35 @@ def main():
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 sim_speed_idx = (sim_speed_idx + 1) % len(SPEED_STEPS)
 
+        # ── game over screen ────────────────────────────────────────────────
+        if len(pop['x']) == 0:
+            surf.fill((10, 10, 18))
+            cx, cy = TOTAL_W // 2, HEIGHT // 2
+            font_xl = pygame.font.SysFont("monospace", 36, bold=True)
+            surf.blit(font_xl.render("EXTINCTION", True, (200, 60, 60)),
+                      font_xl.render("EXTINCTION", True, (0,0,0)).get_rect(center=(cx, cy - 60)).move(cx - font_xl.size("EXTINCTION")[0]//2, cy - 60 - font_xl.get_height()//2))
+            label_ext = font_xl.render("EXTINCTION", True, (200, 60, 60))
+            surf.blit(label_ext, label_ext.get_rect(center=(cx, cy - 40)))
+            label_tick = font.render(f"survived {tick:,} ticks", True, (160, 160, 180))
+            surf.blit(label_tick, label_tick.get_rect(center=(cx, cy + 10)))
+            btn_rect = pygame.Rect(cx - 80, cy + 50, 160, 40)
+            pygame.draw.rect(surf, (50, 120, 50), btn_rect, border_radius=6)
+            label_btn = font.render("R  restart", True, (220, 255, 220))
+            surf.blit(label_btn, label_btn.get_rect(center=btn_rect.center))
+            pygame.display.flip()
+            clock.tick(FPS)
+            # wait for R key or button click
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit(); sys.exit()
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    pygame.quit(); sys.exit()
+                if (event.type == pygame.KEYDOWN and event.key == pygame.K_r) or \
+                   (event.type == pygame.MOUSEBUTTONDOWN and btn_rect.collidepoint(event.pos)):
+                    pop, food = new_world(rng)
+                    tick = 0; history = []; hall_fame = []; sel_idx = None
+            continue
+
         steps_this_frame = SPEED_STEPS[sim_speed_idx] or 80
 
         for _ in range(steps_this_frame):
