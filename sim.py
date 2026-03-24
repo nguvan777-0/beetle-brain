@@ -18,31 +18,48 @@ Population dict keys:
     generation, age, eaten                  — stats (N,) int32
 """
 
+import tomllib
 import numpy as np
+from pathlib import Path
 from brain.coreml_brain import init_brain, run_brain
 
-# ── CONFIG ────────────────────────────────────────────────────────────────────
-WIDTH, HEIGHT   = 900, 900
-N_FOOD          = 200
-N_START         = 80
-MAX_POP         = 300
+# ── LOAD CONFIG ───────────────────────────────────────────────────────────────
+_cfg_path = Path(__file__).resolve().parent / "config.toml"
+with open(_cfg_path, "rb") as _f:
+    _cfg = tomllib.load(_f)
 
-SPEED_MAX       = 4.0;    SPEED_MIN  = 0.3
-FOV_MAX         = np.pi*0.9; FOV_MIN = np.pi*0.15
-RAY_MAX         = 180.0;  RAY_MIN   = 30.0
-SIZE_MAX        = 9.0;    SIZE_MIN  = 3.0
-DRAIN_MAX       = 0.18;   DRAIN_MIN = 0.02
-ENERGY_START    = 120.0;  ENERGY_MAX = 200.0
-ENERGY_FOOD     = 55.0;   ENERGY_BREED = 160.0; ENERGY_CLONE = 80.0
+WIDTH, HEIGHT   = _cfg["world"]["width"],      _cfg["world"]["height"]
+N_FOOD          = _cfg["world"]["food_count"]
+N_START         = _cfg["world"]["n_start"]
+MAX_POP         = _cfg["world"]["max_pop"]
 
-N_RAYS    = 7
-N_INPUTS  = N_RAYS * 2 + 1
-N_HIDDEN  = 12
-N_OUTPUTS = 2
-N_BODY    = 9
+SPEED_MIN       = _cfg["traits"]["speed_min"]; SPEED_MAX  = _cfg["traits"]["speed_max"]
+FOV_MIN         = _cfg["traits"]["fov_min"];   FOV_MAX    = _cfg["traits"]["fov_max"]
+RAY_MIN         = _cfg["traits"]["ray_min"];   RAY_MAX    = _cfg["traits"]["ray_max"]
+SIZE_MIN        = _cfg["traits"]["size_min"];  SIZE_MAX   = _cfg["traits"]["size_max"]
+DRAIN_MIN       = _cfg["traits"]["drain_min"]; DRAIN_MAX  = _cfg["traits"]["drain_max"]
 
-MUTATION_RATE  = 0.12
-MUTATION_SCALE = 0.15
+ENERGY_START    = _cfg["energy"]["start"]
+ENERGY_MAX      = _cfg["energy"]["max"]
+ENERGY_FOOD     = _cfg["energy"]["food"]
+ENERGY_BREED    = _cfg["energy"]["breed_at"]
+ENERGY_CLONE    = _cfg["energy"]["clone_with"]
+
+N_RAYS          = _cfg["brain"]["n_rays"]
+N_HIDDEN        = _cfg["brain"]["n_hidden"]
+N_OUTPUTS       = _cfg["brain"]["n_outputs"]
+N_INPUTS        = N_RAYS * 2 + 1
+N_BODY          = 9
+
+MUTATION_RATE   = _cfg["evolution"]["mutation_rate"]
+MUTATION_SCALE  = _cfg["evolution"]["mutation_scale"]
+EPIGENETIC      = _cfg["evolution"]["epigenetic"]
+
+AGING_ENABLED   = _cfg["aging"]["enabled"]
+WEIGHT_DECAY    = _cfg["aging"]["weight_decay"]
+
+CAMO_ENABLED    = _cfg["camouflage"]["enabled"]
+CAMO_BONUS      = _cfg["camouflage"]["detect_bonus"]
 
 # ── WORLD GRID (shared spatial data structure) ────────────────────────────────
 # The world is rasterized into a (2, GH, GW) grid each tick.
@@ -234,7 +251,7 @@ def tick(pop, food, rng):
         np.fill_diagonal(dist_o, np.inf)
         # bright prey are detectable from further away — camouflage pressure
         brightness = (pop['r'].astype(np.float32) + pop['g'] + pop['b']) / (3.0 * 255.0)  # (N,) 0-1
-        detect_r   = pop['size'] + brightness * SIZE_MAX                                   # (N,) bigger when bright
+        detect_r   = pop['size'] + (brightness * CAMO_BONUS if CAMO_ENABLED else 0.0)     # (N,)
         touch    = dist_o < (pop['size'][:, None] + detect_r[None, :])                    # (N, N)
         bigger   = pop['size'][:, None] > pop['size'][None, :] * 1.25             # (N, N)
         kills    = touch & bigger                                                   # (N, N)
@@ -248,6 +265,18 @@ def tick(pop, food, rng):
         pop['eaten'] += kills.sum(axis=1).astype(np.int32)
     else:
         killed = np.zeros(N, dtype=bool)
+
+    # ── aging: weights decay toward zero each tick ──────────────────────────
+    # traits drift toward midpoint, brain softens — old organisms get worse
+    if AGING_ENABLED:
+        decay = 1.0 - WEIGHT_DECAY
+        pop['W_body'] *= decay
+        pop['W1']     *= decay
+        pop['W2']     *= decay
+        # re-decode traits from decayed W_body so physics reflects aging
+        (pop['speed'], pop['fov'], pop['ray_len'], pop['size'],
+         pop['drain'],  pop['turn_s'],
+         pop['r'], pop['g'], pop['b']) = _decode(pop['W_body'])
 
     # ── death ───────────────────────────────────────────────────────────────
     alive = (pop['energy'] > 0) & (~killed)
@@ -317,5 +346,5 @@ def _clone_batch(pop, idx, rng):
         'generation':(pop['generation'][idx] + 1).astype(np.int32),
         'age':       np.zeros(n, dtype=np.int32),
         'eaten':     np.zeros(n, dtype=np.int32),
-        'h_state':   pop['h_state'][idx] * 0.25,  # 25% epigenetic inheritance — born pre-shaped by parent's experience
+        'h_state':   pop['h_state'][idx] * EPIGENETIC,
     }
