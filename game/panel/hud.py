@@ -131,11 +131,16 @@ def _draw_trait_heatmap(surf, pop, rect, font_sm):
         surf.blit(font_sm.render(name, True, (120, 130, 150)), (rx, ty))
 
 
-def _anc_to_color(ancestor_id: int) -> tuple:
-    """Golden-ratio hue hash → RGB.  Deterministic, well-distributed."""
-    hue = (int(ancestor_id) * 0.618033988749895) % 1.0
-    r, g, b = colorsys.hsv_to_rgb(hue, 0.85, 0.9)
+def _hue_to_rgb(hue: float) -> tuple:
+    """Phylo hue [0,1] → RGB."""
+    r, g, b = colorsys.hsv_to_rgb(float(hue) % 1.0, 0.85, 0.9)
     return (int(r * 255), int(g * 255), int(b * 255))
+
+
+def _anc_color(ancestor_id: int, phylo_state) -> tuple:
+    """Look up lineage color from phylo hue array."""
+    from sim.phylo import M
+    return _hue_to_rgb(phylo_state['hue'][int(ancestor_id) % M])
 
 
 def _draw_pca_scatter(surf, pop, rect, phylo_state):
@@ -168,13 +173,13 @@ def _draw_pca_scatter(surf, pop, rect, phylo_state):
     depth                  = max(4, int(pop['generation'].max()) // 3)
     ancestors              = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
     unique_anc, inv        = np.unique(ancestors, return_inverse=True)
-    color_map              = [_anc_to_color(int(a)) for a in unique_anc]
+    color_map              = [_anc_color(int(a), phylo_state) for a in unique_anc]
 
     for i in range(len(xs)):
         pygame.draw.circle(surf, color_map[inv[i]], (int(xs[i]), int(ys[i])), 2)
 
 
-def _draw_stacked_area(surf, lineage_history, rect):
+def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
     """Stacked area chart: each phylo sub-lineage a coloured band, time on x-axis."""
     if len(lineage_history) < 2:
         return
@@ -200,7 +205,7 @@ def _draw_stacked_area(surf, lineage_history, rect):
             if h == 0:
                 continue
             top = bot - h
-            pygame.draw.rect(surf, _anc_to_color(aid), (x, top, max(1, x1 - x), h))
+            pygame.draw.rect(surf, _anc_color(aid, phylo_state), (x, top, max(1, x1 - x), h))
             bot = top
 
     pygame.draw.rect(surf, (50, 50, 80), rect, 1)
@@ -242,13 +247,13 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         # ── stacked area: phylo sub-lineage populations over time ────────────
         txt("LINEAGES over time", font, (200, 180, 140))
         chart_h = 90
-        _draw_stacked_area(surf, lineage_history, (px + 8, y, PANEL_W - 16, chart_h))
+        _draw_stacked_area(surf, lineage_history, (px + 8, y, PANEL_W - 16, chart_h), phylo_state)
         y += chart_h + 4
         # legend: current sub-lineages sorted by size
         if lineage_history:
             lx = px + 10
             for aid, cnt in sorted(lineage_history[-1].items(), key=lambda kv: -kv[1]):
-                color = _anc_to_color(aid)
+                color = _anc_color(aid, phylo_state)
                 pygame.draw.circle(surf, color, (lx + 4, y + 5), 4)
                 surf.blit(font_sm.render(f"{cnt}", True, color), (lx + 11, y))
                 lx += 38
