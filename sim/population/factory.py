@@ -1,7 +1,8 @@
 """Create new populations and worlds."""
 import numpy as np
-from sim.config import WIDTH, HEIGHT, N_FOOD, N_START, N_INPUTS, N_HIDDEN, N_OUTPUTS, ENERGY_START
+from sim.config import N_FOOD, N_START, N_INPUTS, N_HIDDEN, N_OUTPUTS, ENERGY_START, WIDTH, HEIGHT
 from sim.population.genome import decode, N_BODY
+from sim.vents import make_vents, spawn_near_vents
 
 
 def make_pop(n, rng):
@@ -23,9 +24,10 @@ def make_pop(n, rng):
     }
 
 
-def new_world(rng=None):
+def new_world(rng=None, world_seed=None):
     if rng is None:
         rng = np.random.default_rng()
-    pop  = make_pop(N_START, rng)
-    food = rng.uniform(0, [WIDTH, HEIGHT], size=(N_FOOD, 2)).astype(np.float32)
-    return pop, food
+    vents = make_vents(world_seed)
+    pop   = make_pop(N_START, rng)
+    food  = spawn_near_vents(N_FOOD, vents, rng)
+    return pop, food, vents
