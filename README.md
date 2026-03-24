@@ -6,7 +6,9 @@ Neuroevolution sim where the organism is its weights, accelerated via CoreML on 
 
 ## What it is
 
-213 floats per organism. 9 body weights, 180 for the first brain layer, 24 for the second. That's it. Size, speed, color, field of view, energy drain, how it turns, how it thinks — all decoded from the same array. Mutate the array, you get a child. Copy it, you get a clone. Free it, it dies.
+The organism is called a **wight**. 213 floats per wight. 9 body weights, 180 for the first brain layer, 24 for the second. That's it. Size, speed, color, field of view, energy drain, how it turns, how it thinks — all decoded from the same array. Mutate the array, you get a child. Copy it, you get a clone. Free it, it dies.
+
+Starts with a single wight. Everything else emerges.
 
 Organisms ray-cast through a rasterized world grid — O(1) per organism regardless of population size. All 300 brains run in a single batched CoreML call (weights passed as runtime inputs, routed to GPU or ANE by the OS).
 
@@ -15,7 +17,7 @@ Organisms ray-cast through a rasterized world grid — O(1) per organism regardl
 
 Inspired by the eyes of the Cambrian.
 
-Every organism has a field of view encoded in its genome. It evolves alongside body size, speed, and brain weights — all in the same mutation pass.
+Every wight has a field of view encoded in its genome. It evolves alongside body size, speed, and brain weights — all in the same mutation pass.
 
 - eat food → gain energy
 - touch something smaller (>1.25× your size) → eat it, gain 70% of its energy
