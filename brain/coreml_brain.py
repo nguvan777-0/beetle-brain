@@ -114,19 +114,29 @@ def run_brain(x: np.ndarray, W1: np.ndarray, W2: np.ndarray,
     h_prev: (N, N_HIDDEN)
     →  h_new (N, N_HIDDEN),  out (N, N_OUTPUTS)
     """
+    if x.shape[0] == 0:
+        return np.empty((0, _n_hid), dtype=np.float32), np.empty((0, _n_out), dtype=np.float32)
+
     if _use_coreml and _model is not None:
         n = x.shape[0]
-        if n < _max_pop:
-            pad = _max_pop - n
-            x      = np.vstack([x,      np.zeros((pad, _n_in),           dtype=np.float32)])
-            W1     = np.concatenate([W1, np.zeros((pad, _n_in, _n_hid),  dtype=np.float32)])
-            W2     = np.concatenate([W2, np.zeros((pad, _n_hid, _n_out), dtype=np.float32)])
-            h_prev = np.vstack([h_prev,  np.zeros((pad, _n_hid),         dtype=np.float32)])
-        result = _model.predict({"x":      x.astype(np.float32),
-                                  "W1":     W1.astype(np.float32),
-                                  "W2":     W2.astype(np.float32),
-                                  "h_prev": h_prev.astype(np.float32)})
-        return result['h_new'][:n], result['out'][:n]
+        h_chunks, o_chunks = [], []
+        for s in range(0, n, _max_pop):
+            e       = min(s + _max_pop, n)
+            chunk   = e - s
+            xi      = x[s:e].astype(np.float32)
+            W1i     = W1[s:e].astype(np.float32)
+            W2i     = W2[s:e].astype(np.float32)
+            hi      = h_prev[s:e].astype(np.float32)
+            if chunk < _max_pop:
+                pad    = _max_pop - chunk
+                xi     = np.vstack([xi,  np.zeros((pad, _n_in),           dtype=np.float32)])
+                W1i    = np.concatenate([W1i, np.zeros((pad, _n_in, _n_hid),  dtype=np.float32)])
+                W2i    = np.concatenate([W2i, np.zeros((pad, _n_hid, _n_out), dtype=np.float32)])
+                hi     = np.vstack([hi,  np.zeros((pad, _n_hid),           dtype=np.float32)])
+            r = _model.predict({"x": xi, "W1": W1i, "W2": W2i, "h_prev": hi})
+            h_chunks.append(r['h_new'][:chunk])
+            o_chunks.append(r['out'][:chunk])
+        return np.vstack(h_chunks), np.vstack(o_chunks)
 
     # numpy fallback
     h_new = np.tanh(np.einsum('bi,bih->bh', x, W1) + h_prev)
