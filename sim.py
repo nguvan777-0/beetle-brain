@@ -354,11 +354,6 @@ def tick(pop, food, rng):
         new_f = rng.uniform(0, [WIDTH, HEIGHT], size=(short, 2)).astype(np.float32)
         food  = np.vstack([food, new_f]) if len(food) else new_f
 
-    # ── inject random if population collapses ───────────────────────────────
-    if len(pop['x']) < 10:
-        fresh = _make_pop(20, rng)
-        pop   = _concat(pop, fresh)
-
     return pop, food
 
 
