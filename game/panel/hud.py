@@ -1,7 +1,7 @@
 """Main stats panel drawn on the right side of the screen."""
 import numpy as np
 import pygame
-from sim.config import SPEED_MAX, SIZE_MAX, MUTATION_RATE_MAX, DRAIN_SCALE, N_START
+from sim.config import SPEED_MAX, SIZE_MAX, MUTATION_RATE_MAX, DRAIN_SCALE, N_START, WIDTH, HEIGHT, VENT_RADIUS
 from sim.population.genome import N_BODY
 from game.panel.sparkline import draw_sparkline
 
@@ -12,6 +12,46 @@ _LINEAGE_COLORS = [
     (200, 100, 255), (255, 150,  50), ( 80, 220, 200), (220, 220, 100),
     (180,  80, 180), (100, 180, 100), (255, 120, 180), (140, 180, 255),
 ]
+
+
+def _draw_vent_map(surf, pop, vents, rect):
+    """Minimap: world outline, vents coloured by dominant lineage."""
+    rx, ry, rw, rh = rect
+    pygame.draw.rect(surf, (10, 10, 20), rect)
+    pygame.draw.rect(surf, (40, 40, 60), rect, 1)
+
+    sx = rw / WIDTH
+    sy = rh / HEIGHT
+
+    # draw each vent circle, coloured by dominant lineage
+    for vx, vy in vents:
+        mx = rx + int(vx * sx)
+        my = ry + int(vy * sy)
+        vr = max(3, int(VENT_RADIUS * sx))
+
+        if len(pop['x']) > 0:
+            dx = pop['x'] - vx
+            dy = pop['y'] - vy
+            nearby = np.where(dx*dx + dy*dy < VENT_RADIUS*VENT_RADIUS)[0]
+            if len(nearby) > 0:
+                lids   = pop['lineage_id'][nearby]
+                winner = int(np.bincount(lids, minlength=N_START).argmax())
+                color  = _LINEAGE_COLORS[winner % len(_LINEAGE_COLORS)]
+            else:
+                color = (40, 40, 60)
+        else:
+            color = (40, 40, 60)
+
+        pygame.draw.circle(surf, color, (mx, my), vr, 2)
+        pygame.draw.circle(surf, (*[c//3 for c in color], 80), (mx, my), vr)
+
+    # draw all wights as 1px dots
+    for i in range(len(pop['x'])):
+        lid   = int(pop['lineage_id'][i])
+        color = _LINEAGE_COLORS[lid % len(_LINEAGE_COLORS)]
+        wx    = rx + int(pop['x'][i] * sx)
+        wy    = ry + int(pop['y'][i] * sy)
+        surf.set_at((wx, wy), color)
 
 
 def _draw_pca_scatter(surf, pop, rect):
@@ -71,7 +111,7 @@ def _draw_stacked_area(surf, lineage_history, rect, n_lineages):
 
 
 def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
-               history, lineage_history, hall_fame, sim_speed=1):
+               history, lineage_history, hall_fame, sim_speed=1, vents=None):
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
@@ -93,6 +133,13 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     txt("BEETLE-BRAIN", font_lg, (220, 220, 255))
     txt(f"tick {tick:,}   [{speed_label}]  SPACE=cycle", font_sm, speed_color)
     sep()
+
+    # ── vent territory minimap ────────────────────────────────────────────────
+    if vents is not None:
+        map_h = int((PANEL_W - 16) * HEIGHT / WIDTH)
+        _draw_vent_map(surf, pop, vents, (px + 8, y, PANEL_W - 16, map_h))
+        y += map_h + 4
+        sep()
 
     N = len(pop['x'])
     if N > 0:
