@@ -17,5 +17,6 @@ from sim.config import (
 )
 from sim.population.genome import N_BODY
 from sim.population import decode, make_pop, new_world, filter_pop, concat_pop
+from sim import phylo
 from sim.brain import init_ane
 from sim.tick import tick
