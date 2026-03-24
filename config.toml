@@ -7,7 +7,7 @@ width       = 900
 height      = 900
 food_count  = 200
 max_pop     = 300
-n_start     = 80        # organisms at world creation
+n_start     = 1          # the first wight
 
 [energy]
 start       = 120.0
