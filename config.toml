@@ -66,6 +66,13 @@ enabled         = true
 detect_bonus    = 9.0   # max extra predation radius for fully bright organism
                         # (scaled by brightness 0-1, added to size)
 
+[hgt]
+# Horizontal gene transfer rates — low by default, both are evolvable genome genes
+eat_rate_min     = 0.005   # near-zero: rarely incorporate prey DNA
+eat_rate_max     = 0.15    # active HGT on every kill
+contact_rate_min = 0.0005  # almost never from brushing past
+contact_rate_max = 0.02    # regular contact exchange
+
 [metabolism]
 energy_max_scale = 10.0    # energy_max = energy_max_scale × size²  (storage ∝ volume)
 drain_scale     = 0.015   # basal drain = drain_scale × size^0.75  (Kleiber's law)
