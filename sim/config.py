@@ -41,7 +41,7 @@ CLONE_WITH_MAX    = _cfg["energy"]["clone_with_max"]
 N_RAYS          = _cfg["brain"]["n_rays"]
 N_HIDDEN        = _cfg["brain"]["n_hidden"]
 N_OUTPUTS       = _cfg["brain"]["n_outputs"]
-N_INPUTS        = N_RAYS * 2 + 1
+N_INPUTS        = N_RAYS * 5 + 1
 
 BRAIN_TAX       = _cfg["metabolism"].get("brain_tax", 0.0002)
 
