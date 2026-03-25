@@ -76,11 +76,24 @@ def _lerp_color(t, lo=(60, 100, 200), mid=(60, 200, 120), hi=(220, 80, 60)):
     return tuple(int(mid[i] + (hi[i] - mid[i]) * s) for i in range(3))
 
 
+_traits_surf_cache = None
+
 def _draw_trait_heatmap(surf, pop, rect, font_sm):
     """One row per trait: p10–p90 band + median tick, colored by median position."""
-    if len(pop['x']) < 2:
-        return
+    global _traits_surf_cache
     rx, ry, rw, rh = rect
+
+    if len(pop['x']) < 2:
+        if _traits_surf_cache is not None:
+            surf.blit(_traits_surf_cache, (rx, ry))
+        return
+
+    # Create or reuse cache surface
+    if _traits_surf_cache is None or _traits_surf_cache.get_size() != (rw, rh):
+        _traits_surf_cache = pygame.Surface((rw, rh), pygame.SRCALPHA)
+    
+    tsurf = _traits_surf_cache
+    tsurf.fill((0, 0, 0, 0))  # Clear with transparent
 
     traits = [
         ('speed',  pop['speed'],                   SPEED_MIN,        SPEED_MAX),
@@ -102,12 +115,12 @@ def _draw_trait_heatmap(surf, pop, rect, font_sm):
     ]
 
     lbl_w  = 38
-    bar_x  = rx + lbl_w
+    bar_x  = lbl_w
     bar_w  = rw - lbl_w - 4
     row_h  = max(6, rh // len(traits))
 
     for i, (name, vals, lo, hi) in enumerate(traits):
-        ty   = ry + i * row_h
+        ty   = i * row_h
         span = hi - lo if hi != lo else 1.0
 
         p10    = float(np.percentile(vals, 10))
@@ -122,16 +135,18 @@ def _draw_trait_heatmap(surf, pop, rect, font_sm):
         dim   = tuple(c // 4 for c in color)
 
         # background track
-        pygame.draw.rect(surf, (20, 20, 32), (bar_x, ty + 1, bar_w, row_h - 2))
+        pygame.draw.rect(tsurf, (20, 20, 32), (bar_x, ty + 1, bar_w, row_h - 2))
         # p10–p90 band
         bx = bar_x + int(np.clip(n_p10, 0, 1) * bar_w)
         bw = max(1, int((np.clip(n_p90, 0, 1) - np.clip(n_p10, 0, 1)) * bar_w))
-        pygame.draw.rect(surf, dim, (bx, ty + 1, bw, row_h - 2))
+        pygame.draw.rect(tsurf, dim, (bx, ty + 1, bw, row_h - 2))
         # median tick
         mx = bar_x + int(np.clip(n_med, 0, 1) * bar_w)
-        pygame.draw.rect(surf, color, (mx - 1, ty, 3, row_h))
+        pygame.draw.rect(tsurf, color, (mx - 1, ty, 3, row_h))
         # label
-        surf.blit(font_sm.render(name, True, (120, 130, 150)), (rx, ty))
+        tsurf.blit(font_sm.render(name, True, (120, 130, 150)), (0, ty))
+
+    surf.blit(tsurf, (rx, ry))
 
 
 def _hue_to_rgb(hue: float) -> tuple:
@@ -146,21 +161,33 @@ def _anc_color(ancestor_id: int, phylo_state) -> tuple:
     return _hue_to_rgb(phylo_state['hue'][int(ancestor_id) % M])
 
 
+_pca_surf_cache = None
+
 def _draw_pca_scatter(surf, pop, rect, phylo_state, pca_proj):
     """Draw pre-computed PCA projection; colour by phylogenetic sub-lineage."""
-    if pca_proj is None or len(pca_proj) < 3:
-        return
+    global _pca_surf_cache
     rx, ry, rw, rh = rect
-    pygame.draw.rect(surf, (10, 10, 20), rect)
-    pygame.draw.rect(surf, (40, 40, 60), rect, 1)
 
-    proj = pca_proj   # (N, 2) — already computed in sim thread
+    if pca_proj is None or len(pca_proj) < 3:
+        if _pca_surf_cache is not None:
+            surf.blit(_pca_surf_cache, (rx, ry))
+        return
+
+    # Create or reuse cache surface
+    if _pca_surf_cache is None or _pca_surf_cache.get_size() != (rw, rh):
+        _pca_surf_cache = pygame.Surface((rw, rh))
+    
+    psurf = _pca_surf_cache
+    pygame.draw.rect(psurf, (10, 10, 20), (0, 0, rw, rh))
+    pygame.draw.rect(psurf, (40, 40, 60), (0, 0, rw, rh), 1)
+
+    proj = pca_proj
 
     lo  = proj.min(axis=0)
     hi  = proj.max(axis=0)
     span = (hi - lo).clip(min=1e-6)
-    xs  = rx + 4 + ((proj[:, 0] - lo[0]) / span[0] * (rw - 8)).astype(int)
-    ys  = ry + 4 + ((proj[:, 1] - lo[1]) / span[1] * (rh - 8)).astype(int)
+    xs  = 4 + ((proj[:, 0] - lo[0]) / span[0] * (rw - 8)).astype(int)
+    ys  = 4 + ((proj[:, 1] - lo[1]) / span[1] * (rh - 8)).astype(int)
 
     depth                  = max(4, int(pop['generation'].max()) // 3)
     ancestors              = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
@@ -168,7 +195,9 @@ def _draw_pca_scatter(surf, pop, rect, phylo_state, pca_proj):
     color_map              = [_anc_color(int(a), phylo_state) for a in unique_anc]
 
     for i in range(len(xs)):
-        pygame.draw.circle(surf, color_map[inv[i]], (int(xs[i]), int(ys[i])), 2)
+        pygame.draw.circle(psurf, color_map[inv[i]], (int(xs[i]), int(ys[i])), 2)
+
+    surf.blit(psurf, (rx, ry))
 
 
 def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
@@ -237,26 +266,26 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         txt(f"pop {N}  max gen {int(pop['generation'].max())}  max age {int(pop['age'].max())}  max ate {int(pop['eaten'].max())}", font_sm, (160, 200, 160))
         sep()
 
-        # ── stacked area: phylo sub-lineage populations over time ────────────
+    # ── stacked area: phylo sub-lineage populations over time ────────────
+    if lineage_history:
         txt("LINEAGES over time", font, (200, 180, 140))
         chart_h = 90
         _draw_stacked_area(surf, lineage_history, (px + 8, y, PANEL_W - 16, chart_h), phylo_state)
         y += chart_h + 4
-        # legend: current sub-lineages sorted by size
-        if lineage_history:
-            lx = px + 10
-            for aid, cnt in sorted(lineage_history[-1].items(), key=lambda kv: -kv[1]):
-                color = _anc_color(aid, phylo_state)
-                pygame.draw.circle(surf, color, (lx + 4, y + 5), 4)
-                surf.blit(font_sm.render(f"{cnt}", True, color), (lx + 11, y))
-                lx += 38
-                if lx > px + PANEL_W - 38:
-                    lx = px + 10
-                    y += 14
+        lx = px + 10
+        for aid, cnt in sorted(lineage_history[-1].items(), key=lambda kv: -kv[1]):
+            color = _anc_color(aid, phylo_state)
+            pygame.draw.circle(surf, color, (lx + 4, y + 5), 4)
+            surf.blit(font_sm.render(f"{cnt}", True, color), (lx + 11, y))
+            lx += 38
+            if lx > px + PANEL_W - 38:
+                lx = px + 10
+                y += 14
         y += 16
         sep()
 
-        # ── trait heatmap ────────────────────────────────────────────────────
+    # ── trait heatmap ────────────────────────────────────────────────────
+    if N > 0 or len(history) > 0 or _traits_surf_cache is not None:
         txt("TRAITS  (median  |  p10–p90 band)", font, (160, 180, 220))
         n_traits = 16
         hmap_h   = n_traits * 9
@@ -264,7 +293,8 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         y += hmap_h + 4
         sep()
 
-        # ── PCA scatter ──────────────────────────────────────────────────────
+    # ── PCA scatter ──────────────────────────────────────────────────────
+    if pca_proj is not None or _pca_surf_cache is not None:
         txt("STRATEGY SPACE  (W_body PCA)", font, (160, 180, 220))
         _draw_pca_scatter(surf, pop, (px + 8, y, PANEL_W - 16, 130), phylo_state, pca_proj)
         y += 134

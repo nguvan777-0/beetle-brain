@@ -15,7 +15,7 @@ from game.snapshot import save_snapshot, load_snapshot
 from report import generate as generate_report
 
 FPS         = 60
-SPEED_STEPS = [1, 5, 20, 100, 1000]   # ticks per frame
+SPEED_STEPS = [1, 5, 20, 100]   # ticks per frame
 TOTAL_W     = sim.WIDTH + PANEL_W
 HIST_MAX    = 300
 
@@ -84,6 +84,7 @@ def main():
                     world, tick, history, hall_fame = result
                     stats = StatsCollector(); next_sample = SAMPLE_EVERY
                     lineage_hist = []; t_start = time.time(); sel_idx = None
+                    
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = pygame.mouse.get_pos()
                 if mx < sim.WIDTH and len(pop['x']) > 0:
@@ -145,11 +146,6 @@ def main():
             if not extinction_reported:
                 _exit_with_report(stats, tick, world, t_start, extinct=True)
                 extinction_reported = True
-            draw_food(surf, world['food'], world['vents'])
-            draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
-                       history, lineage_hist, hall_fame, 0,
-                       vents=world['vents'], phylo_state=world['phylo'],
-                       seed=world.get('seed'))
             _draw_extinction_overlay(surf, font, font_lg, tick)
             pygame.display.flip()
             clock.tick(FPS)
@@ -162,23 +158,7 @@ def main():
         surf.fill((10, 10, 18))
         draw_food(surf, world['food'], world['vents'])
 
-        if sel_idx is not None and sel_idx < len(pop['x']):
-            draw_rays(surf, pop['x'][sel_idx], pop['y'][sel_idx],
-                      pop['fov'][sel_idx], pop['angle'][sel_idx], pop['ray_len'][sel_idx])
-
-        if len(pop['x']) > 0:
-            depth       = max(4, int(pop['generation'].max()) // 3)
-            anc_ids     = phylo.ancestor_at(pop['individual_id'], depth, world['phylo'])
-            halo_colors = [_anc_color(int(a), world['phylo']) for a in anc_ids]
-            for i in range(len(pop['x'])):
-                draw_organism(surf, pop['x'][i], pop['y'][i], pop['angle'][i],
-                              pop['size'][i], int(pop['r'][i]), int(pop['g'][i]),
-                              int(pop['b'][i]), halo_colors[i])
-
-        if sel_idx is not None and sel_idx < len(pop['x']):
-            pygame.draw.circle(surf, (255, 255, 0),
-                               (int(pop['x'][sel_idx]), int(pop['y'][sel_idx])),
-                               int(pop['size'][sel_idx]) + 3, 1)
+        _draw_organisms(surf, pop, world['phylo'], sel_idx)
 
         pca_proj = _pca_proj(pop['W_body']) if len(pop['x']) >= 3 else None
         sel_wb   = pop['W_body'][sel_idx].copy() if sel_idx is not None and sel_idx < len(pop['x']) else None
@@ -190,6 +170,24 @@ def main():
 
         pygame.display.flip()
         clock.tick(FPS)
+
+
+def _draw_organisms(surf, pop, phylo_state, sel_idx):
+    if sel_idx is not None and sel_idx < len(pop['x']):
+        draw_rays(surf, pop['x'][sel_idx], pop['y'][sel_idx],
+                  pop['fov'][sel_idx], pop['angle'][sel_idx], pop['ray_len'][sel_idx])
+    if len(pop['x']) > 0:
+        depth       = max(4, int(pop['generation'].max()) // 3)
+        anc_ids     = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
+        halo_colors = [_anc_color(int(a), phylo_state) for a in anc_ids]
+        for i in range(len(pop['x'])):
+            draw_organism(surf, pop['x'][i], pop['y'][i], pop['angle'][i],
+                          pop['size'][i], int(pop['r'][i]), int(pop['g'][i]),
+                          int(pop['b'][i]), halo_colors[i])
+    if sel_idx is not None and sel_idx < len(pop['x']):
+        pygame.draw.circle(surf, (255, 255, 0),
+                           (int(pop['x'][sel_idx]), int(pop['y'][sel_idx])),
+                           int(pop['size'][sel_idx]) + 3, 1)
 
 
 def _exit_with_report(stats, tick, world, t_start, extinct):
