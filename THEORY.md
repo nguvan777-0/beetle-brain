@@ -1,100 +1,78 @@
-# growing a brain from the ground up
+# Growing a brain from the ground up
 
-A wight is its weights. The weights are the organism — body and brain, all 222 floats.
-Mutate them, cross them over, let selection filter. No fitness function, no reward
-signal, no loss. Just survival.
+The wight is defined entirely by its weights. Both body and brain consist of 222 floats. 
+These values are mutated, crossed over, and filtered purely by selection. There is no fitness function, reward signal, or loss calculation—only survival.
 
-We already did the first part. Wights go from aimless to hunters. That's proven.
+The first phase is complete: wights reliably evolve from aimless movement to active hunting.
 
 ---
 
-## what we've proven
+## Observed behaviors
 
-Start: 12 random wights, random RNN weights, random movement.
+Starting state: 12 random wights with randomized RNN weights and movement.
 
-The brain is an Elman RNN — no bias, no architecture tricks:
+The brain uses a simple Elman RNN with no biases or architectural tricks:
 
 ```python
-h_t   = tanh(x_t @ W1 + h_{t-1})   # (N_HIDDEN,) = (N_INPUTS,) @ (N_INPUTS, N_HIDDEN)
-out_t = tanh(h_t @ W2)              # (N_OUTPUTS,) — turn and speed
+h_t   = np.tanh(x_t @ W1 + h_prev)  # (N_HIDDEN,) = (N_INPUTS,) @ (N_INPUTS, N_HIDDEN)
+out_t = np.tanh(h_t @ W2)           # (N_OUTPUTS,) — turn and speed
 ```
 
-222 floats total. 18 body, 180 for W1, 24 for W2. That's the whole organism.
+The organism is parameterized by exactly 222 floats: 18 for the body, 180 for W1, and 24 for W2.
 
-Within a few thousand ticks, some wights are tracking and killing prey. W1 and W2
-evolved to make hunting the output of that recurrence. The hidden state is carrying
-something real across ticks. You can watch it happen.
+Within a few thousand ticks, tracking and hunting behaviors emerge. The weights W1 and W2 evolve to map inputs to pursuit outputs, utilizing the hidden state to retain information across ticks.
 
 ---
 
-## what follows from a working substrate
+## Emergent dynamics
 
-**Niche partitioning.** Competing lineages split the resource space to avoid direct
-competition — different prey sizes, different vent territories, different hunting
-strategies. A 12-dimensional h_state can only encode one strategy well. Once two
-predator lineages both evolve pursuit, selection pushes them apart. Character
-displacement — not designed, selected.
+**Niche partitioning.** Competing lineages naturally subdivide the resource space to minimize direct competition, adopting different prey targets, vent territories, or hunting strategies. Because a 12-dimensional hidden state has limited capacity, selection drives competing predator lineages apart into distinct strategies (character displacement).
 
-**Cognitive speciation.** HGT transplants brain weights across lineages. But as W1/W2
-diverge, transplants become incoherent — a recipient brain can't use donor output
-weights built for a different input encoding. At some divergence threshold, gene flow
-ceases. Speciation from cognitive incompatibility, not geography.
+**Cognitive speciation.** Horizontal Gene Transfer (HGT) moves brain weights between lineages. As W1 and W2 diverge between lineages, these transplants become incoherent. A recipient brain cannot process donor output weights that expect a different input encoding. Once divergence reaches a critical threshold, gene flow stops, resulting in speciation driven by cognitive incompatibility rather than geography.
 
-**The Red Queen.** Prey evolve evasion circuits. Predators evolve better pursuit
-circuits. Each improvement degrades the other's fitness — continuous co-evolution with
-no stable endpoint. A predator can absorb the prey's evasion circuit via HGT and use
-it offensively.
+**Red Queen dynamics.** Prey evolve evasion circuits, prompting predators to evolve better pursuit circuits. Each adaptation decreases the opposing lineage's survival rate, driving continuous co-evolution. Predators can also acquire prey evasion circuits via HGT and repurpose them defensively or offensively.
 
-**The Baldwin effect.** Behaviors carried in h_state via epigenetic inheritance can
-become hardwired in W1/W2 — the RNN learns to produce the behavior without needing the
-inherited state. `epigenetic` should evolve down when that happens. Learned → instinct,
-visible in the genome.
+**The Baldwin effect.** Behaviors initially maintained in the hidden state via epigenetic inheritance can become permanently hardwired into W1 and W2. When the RNN evolves to produce the behavior natively, reliance on inherited state (`epigenetic`) decreases. This shifts learned behavior into instinct encoded directly in the genome.
 
 ---
 
-## what h_state actually encodes
+## Decoding the hidden state
 
-Selection is sculpting W1/W2 to read and write h_state usefully. 12 floats per wight
-— opaque by default. The probe:
+Selection optimizes W1 and W2 to effectively read and write to the hidden state. While the 12 floats are opaque by default, they can be probed for correlations:
 
 ```python
-# does any h_state dimension correlate with bearing to nearest vent?
-bearing = np.arctan2(vents[:, 1] - pop['y'][:, None],
-                     vents[:, 0] - pop['x'][:, None]).min(axis=1)
-np.corrcoef(pop['h_state'].T, bearing)  # (12, N) vs (N,)
+# Check if any hidden state dimension correlates with the bearing to the nearest vent:
+dx = vents[:, 0] - pop['x'][:, None]
+dy = vents[:, 1] - pop['y'][:, None]
+
+# Find the vent with the minimum distance squared
+nearest_idx = np.argmin(dx**2 + dy**2, axis=0)
+
+# Calculate bearing to that specific nearest vent
+bearing = np.arctan2(dy[nearest_idx, np.arange(len(pop))], 
+                     dx[nearest_idx, np.arange(len(pop))])
+
+np.corrcoef(pop['h_state'].T, bearing)  # (N_HIDDEN, N) vs (N,)
 ```
 
-If a dimension correlates with vent bearing at gen 100 but not gen 10, the brain
-learned spatial memory. That's measurable.
+Measuring these correlations across generations (e.g., gen 10 vs. gen 100) provides direct metrics for the development of spatial memory and other cognitive traits.
 
 ---
 
-## HGT as the propagation mechanism
+## HGT as a propagation mechanism
 
 ```python
-g = np.concatenate([W_body, W1.flatten(), W2.flatten()])  # (222,)
-cut = rng.integers(1, 222)
-g_new = np.where(np.arange(222) >= cut, g_donor, g_recipient)
+g = np.concatenate([W_body, W1.flatten(), W2.flatten()])  # Entire genome
+cut = rng.integers(1, len(g))
+g_new = np.where(np.arange(len(g)) >= cut, g_donor, g_recipient)
 ```
 
-204 of 222 weights are brain. A predator that kills a wight with a better circuit
-absorbs part of it immediately — not through reproduction, through the kill. Cognitive
-adaptations spread horizontally across lineages as well as vertically through descent.
+Brain weights make up 204 of the 222 total parameters. When a predator kills another wight, it immediately absorbs portions of the victim's genome. This allows advantageous cognitive circuits to spread horizontally across the population via predation, rather than strictly vertically through reproduction.
 
 ---
 
-## can selection grow a larger brain?
+## Evolutionary scaling of brain size
 
-The brain is fixed at N_HIDDEN=12. In biology, brain size is under selection — complex
-environments grow large brains because the cognitive payoff outweighs the metabolic
-cost. Make N_HIDDEN evolvable, penalize it metabolically, and watch whether selection
-drives encephalization when the world demands it.
+Currently, the brain is fixed at `N_HIDDEN=12`. In biological systems, brain size is subject to selection: complex environments favor larger brains because the cognitive advantages outweigh the metabolic costs.
 
-What happens when the environment varies — vents that move, food that cycles? What
-happens when the world is complex enough to require multiple strategies — does the
-population partition into cognitive niches, speciate around incompatible brain
-encodings, run the Red Queen indefinitely?
-
-We have a system where these questions have real answers.
-
-Where do we go from here?
+By making `N_HIDDEN` evolvable and applying a metabolic penalty to it, the system can model encephalization. Future experiments can test whether dynamic environments (e.g., moving vents, cyclical food sources) or complex multi-agent interactions drive the population to evolve larger brain capacities, partition into cognitive niches, and sustain open-ended Red Queen co-evolution.
