@@ -2,7 +2,7 @@
 
 Neuroevolution sim where the organism is its weights, accelerated via CoreML on Apple Silicon (numpy fallback included). We're evolving weights called wights. Each wight's brain is a Recurrent Neural Network (RNN) — hidden state carries across ticks, enabling memory to evolve.
 
-- **Encoded** (genome, evolves): speed, fov, size, color, mouth, pred_ratio, mutation rates, HGT rates, epigenetic carry-over, active neurons — 19 floats decoded via sigmoid.
+- **Encoded** (genome, evolves): speed, fov, size, color, mouth, pred_ratio, mutation rates, HGT rates, epigenetic carry-over, active neurons, n_rays — 20 floats decoded via sigmoid.
 - **Derived** (our rules, does not evolve): `energy_max = 10 × size²` (storage ∝ volume), `drain = 0.015 × size^0.75` (Kleiber's law).
 - **Emergent**: predator/prey dimorphism, camouflage arms races, lineage divergence, and spatial memory — nothing encodes these, they appear.
 
@@ -10,13 +10,15 @@ Neuroevolution sim where the organism is its weights, accelerated via CoreML on 
 
 ## the wight
 
-Each wight is ~563 floats: 19 body weights, 480 for the first brain layer (15 inputs × 32 max hidden), 64 for the second (32 max hidden × 2 outputs). All decoded from the same array via sigmoid. Starts with 12 wights (a primordial soup). Everything else emerges.
+Each wight is ~2,294 floats: 20 body weights (W_body), 1,152 for the first brain layer (36 inputs × 32 max hidden), 64 for the second (32 hidden × 2 outputs), 1,024 for the hidden-to-hidden recurrent layer (32 × 32), and 34 bias weights (b1: 32, b2: 2). All decoded from the same array via sigmoid. Starts with 12 wights (a primordial soup). Everything else emerges.
+
+Each ray returns 5 channels: food distance, organism distance, and the organism's r/g/b color. Up to 7 rays per wight, giving 35 ray inputs + 1 energy = 36 total inputs. The number of active rays (0–7) is an evolvable gene — a blind wight costs nothing on sensing.
 
 Wights ray-cast through a rasterized world grid — O(N) total regardless of population size. Sensing and predation both use the same grid: sensing ray-marches through it, predation reads a fixed patch around each wight. Food spawns near hydrothermal vents with 1/r² density — dense at the vent centre, sparse at the edge. Sensing and brain run fused in a single GPU dispatch (O(1) wall-clock regardless of population size) via a CoreML program that ray-marches and runs the Elman RNN in one kernel.
 
-## Genome: 18 evolving traits
+## Genome: 20 evolving traits
 
-All traits are decoded from `W_body` (18 floats) via sigmoid into their ranges. `energy_max` and `drain` are derived from `size` (not genes).
+All traits are decoded from `W_body` (20 floats) via sigmoid into their ranges. `energy_max` and `drain` are derived from `size` (not genes).
 
 | Gene | Trait | Role |
 |------|-------|------|
@@ -36,6 +38,8 @@ All traits are decoded from `W_body` (18 floats) via sigmoid into their ranges. 
 | 15 | `pred_ratio` | size multiplier required to predate (1.05–2.0×) |
 | 16 | `hgt_eat_rate` | probability of incorporating prey DNA on a kill |
 | 17 | `hgt_contact_rate` | probability of gene exchange on proximity contact |
+| 18 | `active_neurons` | number of live hidden neurons (0–32) — brain capacity |
+| 19 | `n_rays` | number of active rays (0–7) — 0 = completely blind |
 
 ## How evolution works
 
@@ -43,7 +47,7 @@ All traits are decoded from `W_body` (18 floats) via sigmoid into their ranges. 
 - touch something smaller (`pred_ratio × your size`) → eat it, gain 30% of its energy
 - on a kill, roll against `hgt_eat_rate` → single-point crossover your genome with the prey's
 - on proximity contact, roll against `hgt_contact_rate` → same crossover with a neighbor
-- hit `breed_at` energy → clone + mutate all weights (W_body, W1, W2), reset to `clone_with`
+- hit `breed_at` energy → clone + mutate all weights (W_body, W1, W2, Wh, b1, b2), reset to `clone_with`
 - hit 0 energy → die
 - metabolic drain: `DRAIN_SCALE × size^0.75 + speed² × SPEED_TAX + size² × SIZE_TAX + ray_len × fov × SENSING_TAX` per tick
 - population capped at 4096 (keeps youngest generations on overflow)
@@ -75,7 +79,7 @@ sim/                 pure numpy — tick(world, rng) → world, no globals
     painter.py       rasterize world to grid + idx_grid
   population/
     factory.py       spawn initial wight population
-    genome.py        decode W_body → trait dict (N_BODY=18)
+    genome.py        decode W_body → trait dict (N_BODY=20)
     ops.py           filter_pop, concat_pop
 game/                pure pygame — no sim logic
   main.py            event loop, speed modes, extinction screen

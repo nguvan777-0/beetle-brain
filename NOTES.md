@@ -2,6 +2,32 @@
 
 ---
 
+## run 003 — 2026-03-25
+
+**setup:** seed 680501, default config, b1/b2 bias weights added to genome this run, Wh and RGB color vision also active. Standard vent world, no coastline.
+
+**snapshot:** tick 15,627 · pop 643 · max gen 29 · max age 5,327 · max ate 251
+
+**what happened:**
+
+population stabilized around 600–650, no extinction events. a single organism survived 5,327 ticks — roughly 34% of the entire run — indicating a near-immortal grazer that found a stable niche and compounded it.
+
+**ray gene converged to near-zero.** this is the dominant signal. most wights evolved to be nearly blind — 0 or 1 active rays. food density is high enough that random wandering beats paying the sensing tax. the RGB color vision machinery (3 channels per ray, full genome cost) is going unused. this is a food-density problem: vents are too generous to force investment in sight.
+
+hall of fame is a monoculture: all top 5 eaters are gen 18, spd 2.0, sz 8.8 — identical phenotype. strategy-space PCA shows one tight cluster with sparse outliers. fast convergence on a medium-size, medium-speed grazer; no size arms race, no predation pressure.
+
+mouth and predx both near zero. this is a pure herbivore world — no wight-on-wight predation worth measuring. hgt-con is wide, suggesting active contact gene transfer, but it's shuffling the same winning genotype rather than introducing new diversity.
+
+b1/b2 were loaded as zeros (new feature, old snapshot or fresh start). 29 generations is too few to see bias weights pull neuron resting states away from zero.
+
+**open questions:**
+- does food scarcity force the ray gene off zero, or do wights evolve other strategies first (size, speed)?
+- at what food density does color vision become worth the sensing tax?
+- will b1/b2 bias develop visible effect by gen 100+?
+- the near-immortal wight at age 5,327 — is it a predator, a grazer, or just lucky placement near a vent?
+
+---
+
 ## run 002 — 2026-03-24
 
 **setup:** 300 wights, coastline_x=350 (land/sea split), sunlight=0.25, drain_scale=0.010, turn_tax=0.01, vents spawn up to shoreline (tidal pools)
