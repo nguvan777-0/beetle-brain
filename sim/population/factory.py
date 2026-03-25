@@ -24,13 +24,14 @@ def make_pop(n, rng, phylo_state):
         W_body[i, 6] = _logit((b * 255 - 40) / 215)   # b gene
     W1     = (rng.standard_normal((n, N_INPUTS, N_HIDDEN)) * 0.8).astype(np.float32)
     W2     = (rng.standard_normal((n, N_HIDDEN, N_OUTPUTS)) * 0.8).astype(np.float32)
+    Wh     = (rng.standard_normal((n, N_HIDDEN, N_HIDDEN)) * 0.1).astype(np.float32)
     t = decode(W_body)
     return {
         'x':             rng.uniform(0, WIDTH,  n).astype(np.float32),
         'y':             rng.uniform(0, HEIGHT, n).astype(np.float32),
         'angle':         rng.uniform(0, 2 * np.pi, n).astype(np.float32),
         'energy':        np.full(n, ENERGY_START, dtype=np.float32),
-        'W_body': W_body, 'W1': W1, 'W2': W2,
+        'W_body': W_body, 'W1': W1, 'W2': W2, 'Wh': Wh,
         **t,
         'generation':    np.zeros(n, dtype=np.int32),
         'age':           np.zeros(n, dtype=np.int32),
