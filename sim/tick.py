@@ -24,7 +24,7 @@ def tick(world, rng):
 
     # ── sense + brain (fused GPU dispatch) ───────────────────────────────────
     grid, idx_grid = paint_grid(pop, food)
-    h_new, out     = run_sense_brain(pop, grid[0], grid[1])
+    h_new, out     = run_sense_brain(pop, grid[0], grid[1], grid[2], grid[3])
     pop['h_state'] = h_new
     turns  = out[:, 0] * pop['turn_s']
     speeds = (out[:, 1] + 1.0) * pop['speed']

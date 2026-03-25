@@ -1,7 +1,7 @@
 """Save and load world snapshots to/from disk."""
 import os
 import numpy as np
-from sim.config import N_HIDDEN
+from sim.config import N_HIDDEN, N_INPUTS
 from sim.population.genome import decode, N_BODY
 from sim.vents import make_vents
 from sim import phylo
@@ -30,6 +30,14 @@ def save_snapshot(world, tick, history, hall_fame):
     print(f"[saved] {len(pop['x'])} organisms → {SNAPSHOT_PATH}  (tick {tick})")
 
 
+def _migrate_w1(w1):
+    """Zero-pad W1 along the input axis if N_INPUTS grew since this snapshot was saved."""
+    if w1.shape[1] < N_INPUTS:
+        pad = np.zeros((w1.shape[0], N_INPUTS - w1.shape[1], w1.shape[2]), dtype=np.float32)
+        w1 = np.concatenate([w1, pad], axis=1)
+    return w1
+
+
 def load_snapshot(rng):
     if not os.path.exists(SNAPSHOT_PATH):
         return None, 0, [], []
@@ -43,7 +51,7 @@ def load_snapshot(rng):
         'angle':       d['angle'].astype(np.float32),
         'energy':      d['energy'].astype(np.float32),
         'W_body':      W_body,
-        'W1':          d['W1'].astype(np.float32),
+        'W1':          _migrate_w1(d['W1'].astype(np.float32)),
         'W2':          d['W2'].astype(np.float32),
         'Wh':          (d['Wh'].astype(np.float32) if 'Wh' in d
                         else np.zeros((n, N_HIDDEN, N_HIDDEN), dtype=np.float32)),
