@@ -26,11 +26,6 @@ Run headless for N seconds:
 uv run --with numpy --with coremltools --with plotly python world.py 60
 ```
 
-Inspect the current snapshot:
-```
-uv run --with numpy python test_parse.py
-```
-
 `plotly` is optional for report generation. `coremltools` is optional and the sim falls back to numpy.
 
 ## After cloning
