@@ -109,7 +109,10 @@ def tick(world, rng):
         children = clone_batch(pop, np.where(can_breed)[0], rng, phylo_state)
         pop      = filter_pop(pop, alive)
         pop      = concat_pop(pop, children)
-        if len(pop['x']) > MAX_POP:
+        
+        # Branchless max-pop constraint
+        excess_count = max(0, len(pop['x']) - MAX_POP)
+        if excess_count > 0:
             keep = np.argsort(-pop['generation'])[:MAX_POP]
             pop  = filter_pop(pop, keep)
     else:
