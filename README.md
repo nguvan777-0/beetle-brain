@@ -10,9 +10,9 @@ Neuroevolution sim where the organism is its weights, accelerated via CoreML on 
 
 ## the wight
 
-Each wight is ~213 floats: 18 body weights, 180 for the first brain layer, 24 for the second. All decoded from the same array via sigmoid. Starts with 12 wights (a primordial soup). Everything else emerges.
+Each wight is ~222 floats: 18 body weights, 180 for the first brain layer (15 inputs × 12 hidden), 24 for the second (12 hidden × 2 outputs). All decoded from the same array via sigmoid. Starts with 12 wights (a primordial soup). Everything else emerges.
 
-Wights ray-cast through a rasterized world grid — O(N) total regardless of population size. Sensing and predation both use the same grid: sensing ray-marches through it, predation reads a fixed patch around each wight. All brains run in a single batched CoreML call (weights passed as runtime inputs, routed to GPU or ANE by the OS).
+Wights ray-cast through a rasterized world grid — O(N) total regardless of population size. Sensing and predation both use the same grid: sensing ray-marches through it, predation reads a fixed patch around each wight. Food spawns near hydrothermal vents with 1/r² density — dense at the vent centre, sparse at the edge. Sensing and brain run fused in a single GPU dispatch (O(1) wall-clock regardless of population size) via a CoreML program that ray-marches and runs the Elman RNN in one kernel.
 
 ## Genome: 18 evolved traits
 
@@ -56,12 +56,14 @@ world.py             entry point — pygame if available, headless otherwise
 sim/                 pure numpy — tick(world, rng) → world, no globals
   config.py          all constants from config.toml
   tick.py            one simulation step
-  sensing.py         ray-march through grid
+  brain.py           init_ane() wrapper — initialises both CoreML models
+  sensing.py         ray-march through grid (numpy fallback path)
   predation.py       O(N) patch-based kill detection
   hgt.py             horizontal gene transfer (eat + contact crossover)
   evolution.py       clone_batch with per-wight mutation
   phylo.py           ring-buffer ancestry + hue inheritance
   stats.py           trait sampling + hall of fame for post-run report
+  vents.py           hydrothermal vents — seeded food sources with 1/r² density
   grid/
     constants.py     grid geometry
     painter.py       rasterize world to grid + idx_grid
@@ -79,7 +81,8 @@ game/                pure pygame — no sim logic
     hud.py           stats overlay, trait heatmap, lineage chart, PCA scatter
     sparkline.py     population history graph
 brain/
-  coreml_brain.py    batched Elman RNN via CoreML (GPU/ANE)
+  coreml_brain.py       batched Elman RNN via CoreML (GPU/ANE)
+  coreml_sense_brain.py fused sensing + RNN in one GPU dispatch (O(1) wall-clock)
 report.py            self-contained plotly HTML report (not committed)
 ```
 
@@ -97,9 +100,9 @@ uv run --with numpy --with coremltools --with plotly python world.py 60
 
 `plotly` is optional — drop it and the report is skipped. `coremltools` is optional — drop it and the brain runs on numpy instead.
 
-First run compiles the CoreML model (~1s), cached to `build/brain.mlpackage`.
+First run compiles two CoreML models (~1–2s each), cached to `build/brain.mlpackage` and `build/sense_brain.mlpackage`.
 
-**Keys:** `SPACE` cycle speed (1×/5×/20×/100×/1000×/headless) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
+**Keys:** `SPACE` cycle speed (1×/5×/20×/100×) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
 ## run report
 
@@ -117,9 +120,13 @@ Everything is in `config.toml`. Edit it, restart the sim.
 
 ```toml
 [world]
-n_start     = 12      # primordial soup
-max_pop     = 4096    # hard ceiling
-food_count  = 100     # scarce food → real selection pressure
+n_start        = 12      # primordial soup
+max_pop        = 4096    # hard ceiling
+food_count     = 100     # scarce food → real selection pressure
+seed           = 42      # world seed — same seed → same vent layout
+vent_count_min = 3       # hydrothermal vents: food spawns 1/r² dense near each
+vent_count_max = 5
+vent_radius    = 150.0   # food stays within this radius of each vent
 
 [hgt]
 eat_rate_min     = 0.005   # HGT floor on predation
@@ -131,6 +138,7 @@ contact_rate_max = 0.02
 size_tax    = 0.0003  # quadratic size cost
 speed_tax   = 0.004   # quadratic speed cost
 age_tax     = 0.0005  # per-tick entropy drain
+sensing_tax = 0.00004 # ray_len × fov cost — sight is expensive
 
 [aging]
 weight_decay_min = 0.000005
