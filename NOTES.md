@@ -2,6 +2,32 @@
 
 ---
 
+## run 002 — 2026-03-24
+
+**setup:** 300 wights, coastline_x=350 (land/sea split), sunlight=0.25, drain_scale=0.010, turn_tax=0.01, vents spawn up to shoreline (tidal pools)
+
+**what happened:**
+
+speciation confirmed. 79% of the population colonized land within the run. land lineage evolved significantly lower speed and shrank brains down to ~3 active neurons — converging on a plant-like phenotype. sea wights retained fast speed and larger brains (~full neuron budget), staying predatory.
+
+tidal pool vents acted as a bridge. early colonizers could exploit vent energy near the shoreline before photosynthesis pressure fully kicked in. without this, land was a death zone — all wights starved instantly because sunlight (0.05 at the time) couldn't cover basal drain.
+
+the "valley of death" was solved by: (1) buffing sunlight 5x to 0.25, (2) lowering drain_scale from 0.015 to 0.010, (3) placing vents adjacent to the coast. once plants could survive long enough to reproduce, selection pressure sculpted them rapidly.
+
+**turning mechanics (analysis):**
+
+wights have analog steering. `out[:, 0]` from the RNN is a tanh output in `[-1.0, 1.0]` and is applied each tick as `pop['angle'] += turns` where `turns = out[:, 0] * pop['turn_s']`. this is cumulative — a wight holding `+0.5` will spiral continuously.
+
+however, the RNN carries hidden state (`h_prev`) between ticks. if a wight stabilizes its hidden state and settles its turning output toward `0.0`, it locks in a heading and travels straight. this is energetically favorable now that `TURN_TAX = np.abs(turns) * pop['size'] * 0.01` penalizes every tick of rotation. evolution should reward wights that scan briefly, commit to a heading, and glide — rather than spinning indefinitely.
+
+**open questions:**
+- does the land clade eventually lose all motility (speed → 0)?
+- will sea predators evolve to cross the coastline to raid the dense plant clusters?
+- does h_state in the plant clade go dormant (near-zero activations), or does it track something environmental like day/vent proximity?
+- at what depth does turn_tax visibly flatten angular velocity distributions in the population?
+
+---
+
 ## run 001 — 2026-03-23
 
 **setup:** 300 wights, 200 food, 900×900 world, recurrent brain (Elman RNN), camouflage active
@@ -26,4 +52,3 @@ hidden state (h) is very active — mean absolute value 0.70, nearly saturated a
 - at what generation does h_state start doing something interpretable?
 - will color ever diverge, or does size just win forever?
 - what breaks the size monoculture? (a fast small organism that evades?)
-
