@@ -6,7 +6,7 @@ Neuroevolution sim where the organism is its weights, accelerated via CoreML on 
 - **Derived** (our rules, does not evolve): `energy_max = 10 × size²` (storage ∝ volume), `drain = 0.010 × size^0.75` (Kleiber's law).
 - **Emergent**: predator/prey dimorphism, camouflage arms races, lineage divergence, and spatial memory — nothing encodes these, they appear.
 
-![beetle-brain](https://github.com/nguvan777-0/beetle-brain/releases/download/screenshots/screenshot-v2.png)
+![beetle-brain](https://github.com/nguvan777-0/beetle-brain/releases/download/screenshots/screenshot_s753463_0007937.png)
 
 ## Run with the sun
 
