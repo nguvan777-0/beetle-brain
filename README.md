@@ -158,8 +158,7 @@ detect_bonus = 9.0    # how much further bright prey can be detected
 ## Requirements
 
 - Python 3.11+, numpy, pygame
-- coremltools (optional — numpy fallback included)
-- Apple Silicon recommended (CoreML routes to ANE/GPU automatically)
+- coremltools (optional — routes to ANE/GPU on Apple Silicon, numpy fallback otherwise)
 
 ## License
 
