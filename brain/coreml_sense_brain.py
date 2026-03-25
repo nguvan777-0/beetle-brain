@@ -51,7 +51,7 @@ def init_sense_brain() -> bool:
                     meta.get("gw") == GW and meta.get("gh") == GH and
                     meta.get("n_hid") == N_HIDDEN and meta.get("n_out") == N_OUTPUTS and
                     meta.get("has_nrays_mask") is True and meta.get("has_wh") == True and
-                    meta.get("has_rgb") == True):
+                    meta.get("has_rgb") == True and meta.get("has_bias") == True):
                 _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.ALL)
                 _use_coreml = True
                 print(f"[SenseBrain] Loaded cached model ({MODEL_PATH.name})")
@@ -100,10 +100,12 @@ def _compile():
         mb.TensorSpec(shape=(B, N_HIDDEN)),      # h_prev
         mb.TensorSpec(shape=(B, N_HIDDEN)),      # mask
         mb.TensorSpec(shape=(B, N_RAYS * 5)),    # n_rays_mask: 1 for active ray channels, 0 for inactive
+        mb.TensorSpec(shape=(B, N_HIDDEN)),      # b1
+        mb.TensorSpec(shape=(B, N_OUTPUTS)),     # b2
     ])
     def prog(x_pos, y_pos, angle, half_fov,
              ray_len_pix, size_pix, energy_frac,
-             food_grid, r_grid, g_grid, b_grid, W1, W2, Wh, h_prev, mask, n_rays_mask):
+             food_grid, r_grid, g_grid, b_grid, W1, W2, Wh, h_prev, mask, n_rays_mask, b1, b2):
 
         steps_k   = mb.const(val=steps_c)    # (S,)
         offsets_k = mb.const(val=offsets_c)  # (R,)
@@ -229,18 +231,18 @@ def _compile():
         inputs  = mb.concat(values=[ray_inp, nrg_e], axis=1)    # (B, N_INPUTS)
 
         # ── Elman RNN ─────────────────────────────────────────────────────────
-        x_e    = mb.expand_dims(x=inputs, axes=[-2])                          # (B, 1, N_INPUTS)
-        h_raw  = mb.squeeze(x=mb.matmul(x=x_e, y=W1), axes=[-2])             # (B, N_HIDDEN)
-        hp_e   = mb.expand_dims(x=h_prev, axes=[-2])                          # (B, 1, N_HIDDEN)
-        wh_raw = mb.squeeze(x=mb.matmul(x=hp_e, y=Wh), axes=[-2])            # (B, N_HIDDEN)
-        h_new  = mb.tanh(x=mb.add(x=h_raw, y=wh_raw), name='h_new_raw')      # (B, N_HIDDEN)
-        
-        # Apply biological capacity mask
-        h_new = mb.mul(x=h_new, y=mask, name='h_new')                        # (B, N_HIDDEN)
+        x_e    = mb.expand_dims(x=inputs, axes=[-2])                                      # (B, 1, N_INPUTS)
+        h_raw  = mb.squeeze(x=mb.matmul(x=x_e, y=W1), axes=[-2])                         # (B, N_HIDDEN)
+        hp_e   = mb.expand_dims(x=h_prev, axes=[-2])                                      # (B, 1, N_HIDDEN)
+        wh_raw = mb.squeeze(x=mb.matmul(x=hp_e, y=Wh), axes=[-2])                        # (B, N_HIDDEN)
+        h_new  = mb.tanh(x=mb.add(x=mb.add(x=h_raw, y=wh_raw), y=b1), name='h_new_raw') # (B, N_HIDDEN)
 
-        h_e2  = mb.expand_dims(x=h_new, axes=[-2])                           # (B, 1, N_HIDDEN)
-        out   = mb.tanh(x=mb.squeeze(x=mb.matmul(x=h_e2, y=W2), axes=[-2]),
-                        name='out')                                           # (B, N_OUTPUTS)
+        # Apply biological capacity mask
+        h_new = mb.mul(x=h_new, y=mask, name='h_new')                                    # (B, N_HIDDEN)
+
+        h_e2    = mb.expand_dims(x=h_new, axes=[-2])                                      # (B, 1, N_HIDDEN)
+        out_raw = mb.squeeze(x=mb.matmul(x=h_e2, y=W2), axes=[-2])                       # (B, N_OUTPUTS)
+        out     = mb.tanh(x=mb.add(x=out_raw, y=b2), name='out')                         # (B, N_OUTPUTS)
         return h_new, out
 
     model = ct.convert(prog,
@@ -251,7 +253,7 @@ def _compile():
     META_PATH.write_text(json.dumps({
         "max_pop": MAX_POP, "n_rays": N_RAYS, "max_steps": MAX_STEPS,
         "gw": GW, "gh": GH, "n_hid": N_HIDDEN, "n_out": N_OUTPUTS,
-        "has_nrays_mask": True, "has_wh": True, "has_rgb": True,
+        "has_nrays_mask": True, "has_wh": True, "has_rgb": True, "has_bias": True,
     }))
     return ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.ALL)
 
@@ -275,7 +277,7 @@ def run_sense_brain(pop: dict, food_grid: np.ndarray,
     from sim.sensing import sense
     from brain.coreml_brain import run_brain
     inputs = sense(pop, np.stack([food_grid, r_grid, g_grid, b_grid], axis=0))
-    return run_brain(inputs, pop['W1'], pop['W2'], pop['Wh'], pop['h_state'])
+    return run_brain(inputs, pop['W1'], pop['W2'], pop['Wh'], pop['b1'], pop['b2'], pop['h_state'])
 
 
 def _predict(pop, food_grid, r_grid, g_grid, b_grid):
@@ -322,5 +324,7 @@ def _predict(pop, food_grid, r_grid, g_grid, b_grid):
         'h_prev':      _padn(pop['h_state']),
         'mask':        _padn(mask),
         'n_rays_mask': _padn(n_rays_mask),
+        'b1':          _padn(pop['b1']),
+        'b2':          _padn(pop['b2']),
     })
     return r['h_new'][:n], r['out'][:n]
