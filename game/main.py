@@ -172,7 +172,7 @@ def main():
         _draw_organisms(surf, pop, world['phylo'], sel_idx, anc_ids=anc_ids)
 
         if len(pop['x']) > 0:
-            if tick - last_pca_tick >= 15 or cached_pca_proj is None:
+            if tick - last_pca_tick >= 15 or cached_pca_proj is None or len(cached_pca_proj) != len(pop['x']):
                 cached_pca_proj = _pca_proj(pop['W_body'])
                 last_pca_tick = tick
             pca_proj = cached_pca_proj
@@ -231,3 +231,4 @@ def _draw_extinction_overlay(surf, font, font_lg, tick):
     pygame.draw.rect(surf, (40, 100, 40), btn_rect, border_radius=5)
     btn_lbl = font.render("R  restart", True, (200, 240, 200))
     surf.blit(btn_lbl, btn_lbl.get_rect(center=btn_rect.center))
+if __name__ == '__main__': main()
