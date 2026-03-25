@@ -87,12 +87,15 @@ def generate(stats, path="report.html"):
         if meta.get('extinct') else
         f'<span class="badge alive">survived · pop {meta.get("final_pop","?")}</span>'
     )
+    seed_span = (f'<span class="metric">seed <b>{meta["seed"]}</b></span>'
+                 if meta.get('seed') is not None else '')
     summary_html = f"""
     <div class="summary">
       <span class="metric"><b>{meta.get('ticks',0):,}</b> ticks</span>
       <span class="metric"><b>{meta.get('elapsed',0):.1f}s</b> elapsed</span>
       <span class="metric"><b>{meta.get('tps',0):,.0f}</b> ticks/sec</span>
       <span class="metric"><b>{meta.get('final_max_gen',0)}</b> max gen</span>
+      {seed_span}
       {extinct_badge}
     </div>"""
 
