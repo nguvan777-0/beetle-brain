@@ -500,7 +500,7 @@ def _hof_html(hof):
     cards = []
     labels = {
         'longest': ('longest-lived',  'age'),
-        'killer':  ('most kills',     'eaten'),
+        'killer':  ('most ate',        'eaten'),
         'eldest':  ('highest gen',    'generation'),
     }
     for key, (title, _) in labels.items():
@@ -516,7 +516,7 @@ def _hof_html(hof):
             ('body color',   f'{body_swatch} rgb({r},{g},{b})'),
             ('lineage',      f'{lineage_swatch} hue {lhue:.3f}'),
             ('age',          f"{w['age']:,} ticks"),
-            ('kills',        str(w['eaten'])),
+            ('ate',          str(w['eaten'])),
             ('generation',   str(w['generation'])),
             ('size',         f"{w['size']:.2f}"),
             ('speed',        f"{w['speed']:.2f}"),

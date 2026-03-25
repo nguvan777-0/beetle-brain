@@ -122,7 +122,7 @@ Generates `report.html` on exit (ESC, quit, or extinction). Open in any browser 
 - **genome heatmap** — all 18 genes × time, normalized within each gene's range
 - **phase scatter** — size vs pred_ratio at final snapshot, colored by lineage
 - **drain breakdown** — Kleiber + speed² + size² + sensing cost, stacked
-- **hall of fame** — longest-lived, most kills, highest generation
+- **hall of fame** — longest-lived, most ate, highest generation
 
 ## Tuning the world
 
