@@ -265,7 +265,7 @@ def run_sense_brain(pop: dict, food_grid: np.ndarray,
                     ) -> tuple[np.ndarray, np.ndarray]:
     """
     Fused sensing + brain for all wights.
-    food_grid / org_grid: (GH, GW) float32 from paint_grid.
+    food_grid / r_grid / g_grid / b_grid: (GH, GW) float32 from paint_grid.
     Returns (h_new, out) identical to run_brain.
 
     Always routes to the fused GPU model when available — O(1) wall-clock

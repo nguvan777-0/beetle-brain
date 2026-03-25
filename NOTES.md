@@ -2,7 +2,29 @@
 
 ---
 
-## run 002 — 2026-03-24
+## b5aa402:680501 · 2026-03-25 · the blind run
+
+**setup:** coastline_x=350 (land/sea split at world midpoint), sunlight=0.25, drain_scale=0.010. b1/b2 bias weights added to genome this run, Wh and RGB color vision also active.
+
+**snapshot:** tick 15,627 · pop 643 · max gen 29 · max age 5,327 · max ate 251
+
+**what happened:**
+
+population stabilized around 600–650, no extinction events. a single organism survived 5,327 ticks — roughly 34% of the entire run — indicating a near-immortal grazer that found a stable niche and compounded it.
+
+no land/sea speciation visible by tick 15,627, unlike the speciation run. the right half (land) is noticeably sparser but not empty — some wights are on land, but no distinct land clade has split off yet. the difference may be seed (vent positions relative to coastline) or that b1/b2 starting at zero slowed early adaptation.
+
+**ray gene converged to near-zero.** this is the dominant signal. most wights evolved to have near-zero vision — 0 or 1 active rays. food density is high enough that random wandering beats paying the sensing tax. the RGB color vision machinery (3 channels per ray, full genome cost) is going unused. this is a population-density problem: at 600–650 wights packed around a handful of vents, a wight with no vision collides with food and prey by proximity alone — sight adds no marginal value. sight evolves when prey is worth tracking across real distance; that distance never materializes here.
+
+hall of fame is a monoculture: all top 5 eaters are gen 18, spd 2.0, sz 8.8 — identical phenotype. strategy-space PCA shows one tight cluster with sparse outliers. fast convergence on a medium-size, medium-speed grazer; no size arms race, no predation pressure.
+
+mouth and predx both near zero. this is a pure herbivore world — no wight-on-wight predation worth measuring. hgt-con is wide, suggesting active contact gene transfer, but it's shuffling the same winning genotype rather than introducing new diversity.
+
+b1/b2 were loaded as zeros (new feature, fresh genome). 29 generations is too few to see bias weights pull neuron resting states away from zero.
+
+---
+
+## 8ecd0a7:seed42 · 2026-03-24 · speciation
 
 **setup:** 300 wights, coastline_x=350 (land/sea split), sunlight=0.25, drain_scale=0.010, turn_tax=0.01, vents spawn up to shoreline (tidal pools)
 
@@ -20,15 +42,9 @@ wights have analog steering. `out[:, 0]` from the RNN is a tanh output in `[-1.0
 
 however, the RNN carries hidden state (`h_prev`) between ticks. if a wight stabilizes its hidden state and settles its turning output toward `0.0`, it locks in a heading and travels straight. this is energetically favorable now that `TURN_TAX = np.abs(turns) * pop['size'] * 0.01` penalizes every tick of rotation. evolution should reward wights that scan briefly, commit to a heading, and glide — rather than spinning indefinitely.
 
-**open questions:**
-- does the land clade eventually lose all motility (speed → 0)?
-- will sea predators evolve to cross the coastline to raid the dense plant clusters?
-- does h_state in the plant clade go dormant (near-zero activations), or does it track something environmental like day/vent proximity?
-- at what depth does turn_tax visibly flatten angular velocity distributions in the population?
-
 ---
 
-## run 001 — 2026-03-23
+## 07352b5:seed42 · 2026-03-23 · size monoculture
 
 **setup:** 300 wights, 200 food, 900×900 world, recurrent brain (Elman RNN), camouflage active
 **duration:** ~30s headless, 7,891 ticks, 263 ticks/sec
@@ -46,9 +62,3 @@ speed and drain found a stable equilibrium fast — speed ~2.4, drain ~0.08. not
 color barely moved (140.4 → 141.6). camouflage pressure exists — bright prey have a larger predation detection radius — but size selection is so dominant it swamps everything else. color is nearly neutral at this timescale.
 
 hidden state (h) is very active — mean absolute value 0.70, nearly saturated at ±1. the brain is writing strongly into h every tick. whether it's doing something useful — fear, anticipation, momentum — takes more generations to tell. only 7 generations in 30s. the dominant wights live long and breed slowly.
-
-**open questions:**
-- does FOV keep narrowing or does it hit a floor?
-- at what generation does h_state start doing something interpretable?
-- will color ever diverge, or does size just win forever?
-- what breaks the size monoculture? (a fast small organism that evades?)

@@ -11,11 +11,11 @@ Elman RNN — each organism carries a hidden state across ticks:
     h_new   (MAX_POP, N_HIDDEN)            ← stored back into pop
     out     (MAX_POP, N_OUTPUTS)
 
-h_new = tanh(inputs @ W1 + h_prev)   recurrent connection
-out   = tanh(h_new @ W2)
+h_new = tanh(inputs @ W1 + h_prev @ Wh + b1)   recurrent connection
+out   = tanh(h_new @ W2 + b2)
 
 The weights evolve what to write into h and how to read from it.
-Fear, momentum, hunger anticipation — whatever helps survival emerges.
+Hunger, spatial memory, fear, anticipation — whatever helps survival emerges.
 Falls back to numpy einsum if CoreML unavailable.
 """
 from __future__ import annotations
