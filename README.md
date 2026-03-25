@@ -41,18 +41,6 @@ All traits are decoded from `W_body` (20 floats) via sigmoid into their ranges. 
 | 18 | `active_neurons` | number of live hidden neurons (0–32) — brain capacity |
 | 19 | `n_rays` | number of active rays (0–7) — 0 = completely blind |
 
-## How evolution works
-
-- eat food → gain energy (split among all eaters touching the same food)
-- touch something smaller (`pred_ratio × your size`) → eat it, gain 30% of its energy
-- on a kill, roll against `hgt_eat_rate` → single-point crossover your genome with the prey's
-- on proximity contact, roll against `hgt_contact_rate` → same crossover with a neighbor
-- hit `breed_at` energy → clone + mutate all weights (W_body, W1, W2, Wh, b1, b2), reset to `clone_with`
-- hit 0 energy → die
-- metabolic drain: `DRAIN_SCALE × size^0.75 + speed² × SPEED_TAX + size² × SIZE_TAX + ray_len × fov × SENSING_TAX` per tick
-- population capped at 4096 (keeps youngest generations on overflow)
-- extinction → game over screen with restart
-
 ## The endgame: a wightcat
 
 The goal is to scale the environment, metabolic systems, and cognitive capacity until the sim can support a **wightcat**: a complex apex predator with spatial reasoning and pursuit.
