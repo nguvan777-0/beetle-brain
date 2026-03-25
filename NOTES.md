@@ -2,6 +2,32 @@
 
 ---
 
+## a787e90:753463 · 2026-03-25 · the size lock
+
+**setup:** coastline_x=350, sunlight=0.25, drain_scale=0.010. all 5 vents on the sea side (x: 184–245). b1/b2, Wh, RGB color vision active.
+
+**screenshot:** tick 7,937 · pop 296 · max gen 9 · max age 6,952 · max eaten 20
+
+**snapshot:** tick 8,854 · pop 497 · max gen 10 · max age 7,869 · max eaten 20
+
+![screenshot](https://github.com/nguvan777-0/beetle-brain/releases/download/screenshots/screenshot_s753463_0007937.png)
+
+**what happened:**
+
+size is the dominant story. mean 8.61, max 8.75 out of 9.0 — 93% of the range, reached by gen 9. once one big wight exists it eats the small ones and breeds big. it tips, it doesn't drift.
+
+the immortal grazer. max age 6,952 at tick 7,937 — that organism has been alive since roughly tick 985, before gen 5 existed. it found something and never lost it. K-strategist profile: breed_at mean 138/180, slow speed 1.77, conservative clone_with 43/85.
+
+**n_rays collapsed, ray_len didn't.** mean n_rays 1.63 (min 1), but ray_len held at mean 87/180. wights are paying the sensing tax for long rays they mostly don't cast. ray_len alone isn't punishing enough to drive it to zero — only the count collapsed. all 5 vents are on the sea side (left, x: 184–245) with ~500 wights packed around them. at that density a wight with one ray still collides with food by proximity alone.
+
+**brain held at 54% capacity.** mean 17/32 active neurons. not shrinking despite no predation and minimal vision. the hidden state is carrying something useful tick to tick — energy tracking, momentum, turn history.
+
+**population grew from 296 to 497 between tick 7,937 and 8,854.** nearly doubled in ~900 ticks. the run is still expanding.
+
+predation absent: mean eaten 0.3, max 20. pred_ratio mean 1.37 — the gene didn't collapse, just waiting for prey. no land/sea speciation at gen 10 — land (right, x > 350) has sunlight but no vents, and nothing has survived long enough on sunlight alone to establish a land clade.
+
+---
+
 ## b5aa402:680501 · 2026-03-25 · the blind run
 
 **setup:** coastline_x=350 (land/sea split at world midpoint), sunlight=0.25, drain_scale=0.010. b1/b2 bias weights added to genome this run, Wh and RGB color vision also active.
