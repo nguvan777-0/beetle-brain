@@ -2,9 +2,9 @@
 
 Neuroevolution sim where the organism is its weights, accelerated via CoreML on Apple Silicon (numpy fallback included). We're evolving weights called wights. Each wight's brain is a Recurrent Neural Network (RNN) — hidden state carries across ticks, enabling memory to evolve.
 
-- **Encoded** (genome, evolved): speed, fov, size, color, mouth, pred_ratio, mutation rates, HGT rates, epigenetic carry-over — 18 floats decoded via sigmoid.
-- **Derived** (our rules, not evolved): `energy_max = 10 × size²` (storage ∝ volume), `drain = 0.015 × size^0.75` (Kleiber's law).
-- **Emergent**: predator/prey dimorphism, camouflage arms race, lineage divergence, horizontal gene flow — nothing encodes these, they appear.
+- **Encoded** (genome, evolves): speed, fov, size, color, mouth, pred_ratio, mutation rates, HGT rates, epigenetic carry-over — 18 floats decoded via sigmoid.
+- **Derived** (our rules, does not evolve): `energy_max = 10 × size²` (storage ∝ volume), `drain = 0.015 × size^0.75` (Kleiber's law).
+- **Emergent**: predator/prey dimorphism, camouflage arms races, lineage divergence, and spatial memory — nothing encodes these, they appear.
 
 ![beetle-brain](https://github.com/nguvan777-0/beetle-brain/releases/download/screenshots/screenshot-v2.png)
 
@@ -14,7 +14,7 @@ Each wight is ~222 floats: 18 body weights, 180 for the first brain layer (15 in
 
 Wights ray-cast through a rasterized world grid — O(N) total regardless of population size. Sensing and predation both use the same grid: sensing ray-marches through it, predation reads a fixed patch around each wight. Food spawns near hydrothermal vents with 1/r² density — dense at the vent centre, sparse at the edge. Sensing and brain run fused in a single GPU dispatch (O(1) wall-clock regardless of population size) via a CoreML program that ray-marches and runs the Elman RNN in one kernel.
 
-## Genome: 18 evolved traits
+## Genome: 18 evolving traits
 
 All traits are decoded from `W_body` (18 floats) via sigmoid into their ranges. `energy_max` and `drain` are derived from `size` (not genes).
 
@@ -48,6 +48,12 @@ All traits are decoded from `W_body` (18 floats) via sigmoid into their ranges. 
 - metabolic drain: `DRAIN_SCALE × size^0.75 + speed² × SPEED_TAX + size² × SIZE_TAX + ray_len × fov × SENSING_TAX` per tick
 - population capped at 4096 (keeps youngest generations on overflow)
 - extinction → game over screen with restart
+
+## The endgame: a wightcat
+
+The goal is to scale the environment, metabolic systems, and cognitive capacity until the sim can support a **wightcat**: a complex apex predator with spatial reasoning and pursuit.
+
+Life thrives at the boundary between states—rivers, coastlines, and thermal vents. By blasting energy into localized regions of the world, we create the harsh ecological gradients necessary to force complex behavioral adaptations.
 
 ## Package architecture
 
