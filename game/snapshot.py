@@ -34,11 +34,7 @@ def load_snapshot(rng):
     if not os.path.exists(SNAPSHOT_PATH):
         return None, 0, [], []
     d      = np.load(SNAPSHOT_PATH, allow_pickle=True)
-    _wb = d['W_body'].astype(np.float32)
-    if _wb.shape[1] < N_BODY:
-        pad    = np.zeros((_wb.shape[0], N_BODY - _wb.shape[1]), dtype=np.float32)
-        _wb    = np.concatenate([_wb, pad], axis=1)
-    W_body = _wb[:, :N_BODY]
+    W_body = d['W_body'].astype(np.float32)
     t      = decode(W_body)
     n      = len(d['x'])
     pop = {

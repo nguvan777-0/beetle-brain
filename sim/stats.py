@@ -11,6 +11,7 @@ from sim.config import (
     WEIGHT_DECAY_MIN, WEIGHT_DECAY_MAX,
     HGT_EAT_MIN, HGT_EAT_MAX, HGT_CONTACT_MIN, HGT_CONTACT_MAX,
     BREED_AT_MIN, BREED_AT_MAX, CLONE_WITH_MIN, CLONE_WITH_MAX,
+    N_RAYS,
 )
 from sim import phylo as _phylo
 
@@ -36,6 +37,7 @@ GENES = [
     ('pred_ratio',       'pred_ratio',   PRED_RATIO_MIN,   PRED_RATIO_MAX),
     ('hgt_eat_rate',     'hgt_eat',      HGT_EAT_MIN,      HGT_EAT_MAX),
     ('hgt_contact_rate', 'hgt_contact',  HGT_CONTACT_MIN,  HGT_CONTACT_MAX),
+    ('n_rays',           'n_rays',       0,                N_RAYS),
 ]
 GENE_NAMES = [g[1] for g in GENES]
 
