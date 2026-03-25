@@ -65,6 +65,9 @@ def main():
     sim_speed_idx = 0
     sel_idx       = None
     extinction_reported = False
+    
+    last_pca_tick = -999
+    cached_pca_proj = None
 
     while True:
         speed = SPEED_STEPS[sim_speed_idx]
@@ -168,7 +171,14 @@ def main():
             
         _draw_organisms(surf, pop, world['phylo'], sel_idx, anc_ids=anc_ids)
 
-        pca_proj = _pca_proj(pop['W_body']) if len(pop['x']) > 0 else None
+        if len(pop['x']) > 0:
+            if tick - last_pca_tick >= 15 or cached_pca_proj is None:
+                cached_pca_proj = _pca_proj(pop['W_body'])
+                last_pca_tick = tick
+            pca_proj = cached_pca_proj
+        else:
+            pca_proj = None
+
         sel_wb   = pop['W_body'][sel_idx].copy() if sel_idx is not None and sel_idx < len(pop['x']) else None
 
         draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
