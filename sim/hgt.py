@@ -23,9 +23,13 @@ def _crossover(pop, recipient_idx, donor_idx, rng):
     w2_d = pop['W2'][donor_idx]
     wh_r = pop['Wh'][recipient_idx]
     wh_d = pop['Wh'][donor_idx]
+    b1_r = pop['b1'][recipient_idx]
+    b1_d = pop['b1'][donor_idx]
+    b2_r = pop['b2'][recipient_idx]
+    b2_d = pop['b2'][donor_idx]
 
-    g_r = np.concatenate([wb_r, w1_r.reshape(n, -1), w2_r.reshape(n, -1), wh_r.reshape(n, -1)], axis=1)
-    g_d = np.concatenate([wb_d, w1_d.reshape(n, -1), w2_d.reshape(n, -1), wh_d.reshape(n, -1)], axis=1)
+    g_r = np.concatenate([wb_r, w1_r.reshape(n, -1), w2_r.reshape(n, -1), wh_r.reshape(n, -1), b1_r, b2_r], axis=1)
+    g_d = np.concatenate([wb_d, w1_d.reshape(n, -1), w2_d.reshape(n, -1), wh_d.reshape(n, -1), b1_d, b2_d], axis=1)
     L   = g_r.shape[1]
 
     cuts = rng.integers(1, L, size=n)
@@ -35,11 +39,15 @@ def _crossover(pop, recipient_idx, donor_idx, rng):
     n_wb = wb_r.shape[1]
     n_w1 = w1_r.shape[1] * w1_r.shape[2]
     n_w2 = w2_r.shape[1] * w2_r.shape[2]
+    n_wh = wh_r.shape[1] * wh_r.shape[2]
+    n_b1 = b1_r.shape[1]
 
     pop['W_body'][recipient_idx] = g_new[:, :n_wb]
-    pop['W1'][recipient_idx]     = g_new[:, n_wb            : n_wb + n_w1          ].reshape(w1_r.shape)
-    pop['W2'][recipient_idx]     = g_new[:, n_wb + n_w1     : n_wb + n_w1 + n_w2  ].reshape(w2_r.shape)
-    pop['Wh'][recipient_idx]     = g_new[:, n_wb + n_w1 + n_w2 :                   ].reshape(wh_r.shape)
+    pop['W1'][recipient_idx]     = g_new[:, n_wb                        : n_wb+n_w1                ].reshape(w1_r.shape)
+    pop['W2'][recipient_idx]     = g_new[:, n_wb+n_w1                   : n_wb+n_w1+n_w2           ].reshape(w2_r.shape)
+    pop['Wh'][recipient_idx]     = g_new[:, n_wb+n_w1+n_w2              : n_wb+n_w1+n_w2+n_wh      ].reshape(wh_r.shape)
+    pop['b1'][recipient_idx]     = g_new[:, n_wb+n_w1+n_w2+n_wh         : n_wb+n_w1+n_w2+n_wh+n_b1]
+    pop['b2'][recipient_idx]     = g_new[:, n_wb+n_w1+n_w2+n_wh+n_b1   :]
 
     # re-decode body traits from updated W_body
     new_traits = decode(pop['W_body'][recipient_idx])
