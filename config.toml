@@ -80,6 +80,7 @@ energy_max_scale = 10.0    # energy_max = energy_max_scale × size²  (storage �
 drain_scale     = 0.010   # basal drain = drain_scale × size^0.75  (Kleiber's law)
 size_tax        = 0.0003  # energy -= size² × size_tax per tick       (big = expensive)
 speed_tax       = 0.004   # energy -= speed² × speed_tax per tick    (fast = expensive)
+turn_tax        = 0.01    # energy -= |turn| × size × turn_tax       (turning = expensive)
 age_tax         = 0.0005  # energy *= (1 - age_tax) per tick         (entropy / lifespan cap)
 sensing_tax     = 0.00004 # energy -= ray_len × fov × sensing_tax    (sight = expensive)
 brain_tax       = 0.0002  # energy -= brain_tax × active_neurons^1.5 (thought = expensive)

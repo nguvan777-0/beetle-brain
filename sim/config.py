@@ -60,6 +60,7 @@ ENERGY_MAX_SCALE = _cfg["metabolism"]["energy_max_scale"]
 DRAIN_SCALE     = _cfg["metabolism"]["drain_scale"]
 SIZE_TAX        = _cfg["metabolism"]["size_tax"]
 SPEED_TAX       = _cfg["metabolism"]["speed_tax"]
+TURN_TAX        = _cfg["metabolism"].get("turn_tax", 0.01)
 AGE_TAX         = _cfg["metabolism"]["age_tax"]
 SENSING_TAX     = _cfg["metabolism"]["sensing_tax"]
 
