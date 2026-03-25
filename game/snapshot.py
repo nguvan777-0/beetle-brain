@@ -25,7 +25,8 @@ def save_snapshot(world, tick, history, hall_fame):
         hist=hist_arr,
         phylo_parent=phylo_state['parent'],
         phylo_hue=phylo_state['hue'],
-        phylo_next_id=np.array([phylo_state['next_id']], dtype=np.int32))
+        phylo_next_id=np.array([phylo_state['next_id']], dtype=np.int32),
+        seed=np.array([world.get('seed', 0)], dtype=np.int64))
     print(f"[saved] {len(pop['x'])} organisms → {SNAPSHOT_PATH}  (tick {tick})")
 
 
@@ -68,8 +69,9 @@ def load_snapshot(rng):
             phylo_state['hue'] = np.zeros(phylo.M, dtype=np.float32)
     else:
         phylo_state = phylo.from_snapshot(pop['individual_id'])
+    seed        = int(d['seed'][0]) if 'seed' in d else None
     world       = {'pop': pop, 'food': d['food'].astype(np.float32),
-                   'vents': vents, 'phylo': phylo_state}
+                   'vents': vents, 'phylo': phylo_state, 'seed': seed}
     history     = [tuple(row) for row in d['hist']] if d['hist'].ndim == 2 and len(d['hist']) else []
-    print(f"[loaded] {len(pop['x'])} organisms ← {SNAPSHOT_PATH}  (tick {int(d['tick'][0])})")
+    print(f"[loaded] {len(pop['x'])} organisms ← {SNAPSHOT_PATH}  (tick {int(d['tick'][0])}, seed {seed})")
     return world, int(d['tick'][0]), history, []

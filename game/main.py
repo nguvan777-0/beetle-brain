@@ -36,7 +36,7 @@ def main():
 
     world, tick, history, hall_fame = load_snapshot(rng)
     if world is None:
-        world    = new_world(rng)
+        world    = new_world()
         tick     = 0
         history  = []
         hall_fame = []
@@ -64,7 +64,7 @@ def main():
             draw_food(surf, food, vents)
             draw_panel(surf, font, font_sm, font_lg, tick, last_pop, sel_idx,
                        history, lineage_history, hall_fame, 0, vents=vents,
-                       phylo_state=world['phylo'])
+                       phylo_state=world['phylo'], seed=world.get('seed'))
             _draw_extinction_overlay(surf, font, font_lg, tick)
             pygame.display.flip()
             clock.tick(FPS)
@@ -76,7 +76,7 @@ def main():
                 btn_rect = pygame.Rect(sim.WIDTH // 2 - 80, sim.HEIGHT // 2 + 50, 160, 40)
                 if (event.type == pygame.KEYDOWN and event.key == pygame.K_r) or \
                    (event.type == pygame.MOUSEBUTTONDOWN and btn_rect.collidepoint(event.pos)):
-                    world = new_world(rng)
+                    world = new_world()
                     pop = world['pop']; food = world['food']; vents = world['vents']
                     tick = 0; history = []; hall_fame = []; lineage_history = []; sel_idx = None
                     stats = StatsCollector(); next_sample = SAMPLE_EVERY
@@ -193,7 +193,7 @@ def main():
 
         draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                    history, lineage_history, hall_fame, SPEED_STEPS[sim_speed_idx],
-                   vents=vents, phylo_state=world['phylo'])
+                   vents=vents, phylo_state=world['phylo'], seed=world.get('seed'))
 
         pygame.display.flip()
         clock.tick(FPS)

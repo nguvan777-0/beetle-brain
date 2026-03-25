@@ -215,7 +215,8 @@ def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
 
 
 def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
-               history, lineage_history, hall_fame, sim_speed=1, vents=None, phylo_state=None):
+               history, lineage_history, hall_fame, sim_speed=1, vents=None, phylo_state=None,
+               seed=None):
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
@@ -234,17 +235,17 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
     speed_label = "HEADLESS" if sim_speed == 0 else f"{sim_speed}x"
     speed_color = (255, 180, 50) if sim_speed != 1 else (120, 120, 150)
-    txt("BEETLE-BRAIN", font_lg, (220, 220, 255))
+    surf.blit(font_lg.render("BEETLE-BRAIN", True, (220, 220, 255)), (px + 10, y))
+    if seed is not None:
+        seed_surf = font_sm.render(f"seed {seed}", True, (100, 110, 140))
+        surf.blit(seed_surf, (px + PANEL_W - seed_surf.get_width() - 8, y + 3))
+    y += font_lg.get_height() + 2
     txt(f"tick {tick:,}   [{speed_label}]  SPACE=cycle", font_sm, speed_color)
     sep()
 
     N = len(pop['x'])
     if N > 0:
-        txt("POPULATION", font, (160, 200, 160))
-        txt(f"  count   {N:4d}", font_sm)
-        txt(f"  max gen {int(pop['generation'].max()):4d}", font_sm)
-        txt(f"  max age {int(pop['age'].max()):6d}", font_sm)
-        txt(f"  max ate {int(pop['eaten'].max()):4d}", font_sm)
+        txt(f"pop {N}  max gen {int(pop['generation'].max())}  max age {int(pop['age'].max())}  max ate {int(pop['eaten'].max())}", font_sm, (160, 200, 160))
         sep()
 
         # ── stacked area: phylo sub-lineage populations over time ────────────

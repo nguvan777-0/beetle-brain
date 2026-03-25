@@ -41,11 +41,12 @@ def make_pop(n, rng, phylo_state):
     }
 
 
-def new_world(rng=None, world_seed=None):
-    if rng is None:
-        rng = np.random.default_rng()
-    vents       = make_vents(world_seed)
+def new_world(seed=None):
+    if seed is None:
+        seed = int(np.random.default_rng().integers(1_000_000))
+    rng         = np.random.default_rng(seed)
+    vents       = make_vents(seed)
     phylo_state = phylo.new_state(N_START)
     pop         = make_pop(N_START, rng, phylo_state)
     food        = refill_vents(np.empty((0, 2), dtype=np.float32), vents, rng, N_FOOD // len(vents))
-    return {'pop': pop, 'food': food, 'vents': vents, 'phylo': phylo_state}
+    return {'pop': pop, 'food': food, 'vents': vents, 'phylo': phylo_state, 'seed': seed}
