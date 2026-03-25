@@ -45,34 +45,49 @@ def tick(world, rng):
 
     # ── eat food ─────────────────────────────────────────────────────────────
     if len(food) > 0 and len(pop['x']) > 0:
-        # Array Rasterization O(N) Eating
-        # Map food to the same integer painter-grid used for vision
-        from sim.grid.constants import GRID_SCALE, GH, GW
+        # Broad Phase: Map food to integer painter-grid, narrow search via bounding patch
+        from sim.grid.constants import GRID_SCALE, GH, GW, _PR_OFF
         
         fy = np.clip((food[:, 1] * GRID_SCALE).astype(np.int32), 0, GH - 1)
         fx = np.clip((food[:, 0] * GRID_SCALE).astype(np.int32), 0, GW - 1)
         
-        # Look up which organism is standing on the food's grid cell
-        eater_ids = idx_grid[fy, fx] 
-        valid_eats = eater_ids >= 0
+        # Patch lookup around each food pellet
+        row_idx = np.clip(fy[:, None, None] + _PR_OFF[None, :, None], 0, GH - 1)
+        col_idx = np.clip(fx[:, None, None] + _PR_OFF[None, None, :], 0, GW - 1)
+        potentials = idx_grid[row_idx, col_idx]
         
-        # Mask out any food that was eaten
-        eaten_food = np.zeros(len(food), dtype=bool)
-        eaten_food[valid_eats] = True
+        f_idx, ry, rx = np.where(potentials >= 0)
+        eater_candidates = potentials[f_idx, ry, rx]
         
-        if valid_eats.any():
-            actual_eaters = eater_ids[valid_eats]
-            eaten_counts  = np.bincount(actual_eaters, minlength=len(pop['x'])).astype(np.float32)
+        # Narrow Phase: Exact distance checks for physics fidelity
+        if len(eater_candidates) > 0:
+            food_pos = food[f_idx]
+            org_pos = np.stack([pop['x'][eater_candidates], pop['y'][eater_candidates]], axis=1)
+            dist = np.linalg.norm(food_pos - org_pos, axis=1)
             
-            # Since multiple organisms might theoretically map to the same cell (due to resolution),
-            # energy is distributed directly (no sharing division required on grid level)
-            gain_per = eaten_counts * ENERGY_FOOD
+            eat_radius = pop['size'][eater_candidates] + pop['mouth'][eater_candidates]
+            actual_eats = dist < eat_radius
             
-            pop['energy'] = np.minimum(energy_max, pop['energy'] + gain_per)
-            pop['eaten'] += (eaten_counts > 0).astype(np.int32)
+            eaten_f_idx = f_idx[actual_eats]
+            actual_eater_ids = eater_candidates[actual_eats]
             
-            # Filter remaining food
-            food = food[~eaten_food]
+            unique_f, counts_f = np.unique(eaten_f_idx, return_counts=True)
+            
+            if len(unique_f) > 0:
+                f_sharers = np.zeros(len(food), dtype=np.float32)
+                f_sharers[unique_f] = counts_f
+                
+                # Split energy amongst organisms eating the same pellet
+                gain_per_event = ENERGY_FOOD / f_sharers[eaten_f_idx]
+                gain_per_org = np.bincount(actual_eater_ids, weights=gain_per_event, minlength=len(pop['x'])).astype(np.float32)
+                
+                pop['energy'] = np.minimum(energy_max, pop['energy'] + gain_per_org)
+                pop['eaten'] += (np.bincount(actual_eater_ids, minlength=len(pop['x'])) > 0).astype(np.int32)
+                
+                # Filter remaining food
+                eaten_food_mask = np.zeros(len(food), dtype=bool)
+                eaten_food_mask[unique_f] = True
+                food = food[~eaten_food_mask]
 
     # ── predation ────────────────────────────────────────────────────────────
     killed, prey_gain, pred_idx, prey_idx = predation(pop, idx_grid)
@@ -94,7 +109,10 @@ def tick(world, rng):
         children = clone_batch(pop, np.where(can_breed)[0], rng, phylo_state)
         pop      = filter_pop(pop, alive)
         pop      = concat_pop(pop, children)
-        if len(pop['x']) > MAX_POP:
+        
+        # Branchless max-pop constraint
+        excess_count = max(0, len(pop['x']) - MAX_POP)
+        if excess_count > 0:
             keep = np.argsort(-pop['generation'])[:MAX_POP]
             pop  = filter_pop(pop, keep)
     else:

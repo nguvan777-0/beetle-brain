@@ -65,6 +65,8 @@ def main():
     sim_speed_idx = 0
     sel_idx       = None
     extinction_reported = False
+    
+    cached_pca_proj = None
 
     while True:
         speed = SPEED_STEPS[sim_speed_idx]
@@ -168,7 +170,14 @@ def main():
             
         _draw_organisms(surf, pop, world['phylo'], sel_idx, anc_ids=anc_ids)
 
-        pca_proj = _pca_proj(pop['W_body']) if len(pop['x']) > 0 else None
+        if len(pop['x']) > 0:
+            if cached_pca_proj is None or len(pop['x']) != len(cached_pca_proj) or tick >= next_pca_tick:
+                cached_pca_proj = _pca_proj(pop['W_body'])
+                next_pca_tick = tick + 15
+            pca_proj = cached_pca_proj
+        else:
+            pca_proj = None
+
         sel_wb   = pop['W_body'][sel_idx].copy() if sel_idx is not None and sel_idx < len(pop['x']) else None
 
         draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
@@ -221,3 +230,4 @@ def _draw_extinction_overlay(surf, font, font_lg, tick):
     pygame.draw.rect(surf, (40, 100, 40), btn_rect, border_radius=5)
     btn_lbl = font.render("R  restart", True, (200, 240, 200))
     surf.blit(btn_lbl, btn_lbl.get_rect(center=btn_rect.center))
+if __name__ == '__main__': main()
