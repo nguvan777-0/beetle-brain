@@ -2,7 +2,7 @@
 
 Neuroevolution sim where the organism is its weights, accelerated via CoreML on Apple Silicon (numpy fallback included). We're evolving weights called wights. Each wight's brain is a Recurrent Neural Network (RNN) — hidden state carries across ticks, enabling memory to evolve.
 
-- **Encoded** (genome, evolves): speed, fov, size, color, mouth, pred_ratio, mutation rates, HGT rates, epigenetic carry-over — 18 floats decoded via sigmoid.
+- **Encoded** (genome, evolves): speed, fov, size, color, mouth, pred_ratio, mutation rates, HGT rates, epigenetic carry-over, active neurons — 19 floats decoded via sigmoid.
 - **Derived** (our rules, does not evolve): `energy_max = 10 × size²` (storage ∝ volume), `drain = 0.015 × size^0.75` (Kleiber's law).
 - **Emergent**: predator/prey dimorphism, camouflage arms races, lineage divergence, and spatial memory — nothing encodes these, they appear.
 
@@ -10,7 +10,7 @@ Neuroevolution sim where the organism is its weights, accelerated via CoreML on 
 
 ## the wight
 
-Each wight is ~222 floats: 18 body weights, 180 for the first brain layer (15 inputs × 12 hidden), 24 for the second (12 hidden × 2 outputs). All decoded from the same array via sigmoid. Starts with 12 wights (a primordial soup). Everything else emerges.
+Each wight is ~563 floats: 19 body weights, 480 for the first brain layer (15 inputs × 32 max hidden), 64 for the second (32 max hidden × 2 outputs). All decoded from the same array via sigmoid. Starts with 12 wights (a primordial soup). Everything else emerges.
 
 Wights ray-cast through a rasterized world grid — O(N) total regardless of population size. Sensing and predation both use the same grid: sensing ray-marches through it, predation reads a fixed patch around each wight. Food spawns near hydrothermal vents with 1/r² density — dense at the vent centre, sparse at the edge. Sensing and brain run fused in a single GPU dispatch (O(1) wall-clock regardless of population size) via a CoreML program that ray-marches and runs the Elman RNN in one kernel.
 

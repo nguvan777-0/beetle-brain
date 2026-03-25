@@ -102,6 +102,10 @@ def main():
                 stats = StatsCollector(); next_sample = SAMPLE_EVERY
                 lineage_hist = []; t_start = time.time()
                 sel_idx = None; extinction_reported = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_s:
+                path = f"screenshot_s{world.get('seed', 0)}_{tick:07d}.png"
+                pygame.image.save(surf, path)
+                print(f"screenshot → {path}")
 
         # ── sim ticks ─────────────────────────────────────────────────────────
         if len(pop['x']) > 0:
