@@ -9,3 +9,4 @@ venv/
 build/
 snapshot.npz
 report.html
+*.png
