@@ -7,13 +7,12 @@ from sim.config import (
 )
 from sim.vents import refill_vents
 from sim.grid.painter import paint_grid
-from sim.sensing import sense
 from sim.predation import predation
 from sim.evolution import clone_batch
 from sim.hgt import eat_hgt, contact_hgt
 from sim.population.genome import decode
 from sim.population.ops import filter_pop, concat_pop
-from brain.coreml_brain import run_brain
+from brain.coreml_sense_brain import run_sense_brain
 
 
 def tick(world, rng):
@@ -23,12 +22,9 @@ def tick(world, rng):
     phylo_state = world['phylo']
     energy_max  = ENERGY_MAX_SCALE * pop['size'] ** 2   # storage ∝ volume
 
-    # ── sense ────────────────────────────────────────────────────────────────
+    # ── sense + brain (fused GPU dispatch) ───────────────────────────────────
     grid, idx_grid = paint_grid(pop, food)
-    inputs         = sense(pop, grid)
-
-    # ── brain ────────────────────────────────────────────────────────────────
-    h_new, out     = run_brain(inputs, pop['W1'], pop['W2'], pop['h_state'])
+    h_new, out     = run_sense_brain(pop, grid[0], grid[1])
     pop['h_state'] = h_new
     turns  = out[:, 0] * pop['turn_s']
     speeds = (out[:, 1] + 1.0) * pop['speed']
