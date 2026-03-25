@@ -159,7 +159,16 @@ def main():
             sel_idx = None
 
         # ── draw ──────────────────────────────────────────────────────────────
-        surf.fill((10, 10, 18))
+        surf.fill((10, 14, 20))  # deep sea color
+
+        if getattr(sim, 'COASTLINE_X', None) is not None:
+            # Draw the sunny land biome
+            land_rect = pygame.Rect(sim.COASTLINE_X, 0, sim.WIDTH - sim.COASTLINE_X, sim.HEIGHT)
+            pygame.draw.rect(surf, (30, 30, 20), land_rect)
+            
+            # Draw a subtle shore edge
+            pygame.draw.line(surf, (40, 45, 30), (sim.COASTLINE_X, 0), (sim.COASTLINE_X, sim.HEIGHT), 2)
+
         draw_food(surf, world['food'], world['vents'])
 
         # Compute common anc_ids to share between functions

@@ -1,15 +1,16 @@
 """Hydrothermal vents: seeded, concentrated food sources."""
 import numpy as np
-from sim.config import WIDTH, HEIGHT, WORLD_SEED, VENT_COUNT_MIN, VENT_COUNT_MAX, VENT_RADIUS
+from sim.config import WIDTH, HEIGHT, WORLD_SEED, VENT_COUNT_MIN, VENT_COUNT_MAX, VENT_RADIUS, COASTLINE_X
 
 
 def make_vents(seed=None):
     """Generate vent positions deterministically from seed.
-    Vents are kept VENT_RADIUS away from all edges so food never wraps."""
+    Vents are kept VENT_RADIUS away from map edges, but can touch the coastline."""
     rng = np.random.default_rng(seed)
     n   = int(rng.integers(VENT_COUNT_MIN, VENT_COUNT_MAX + 1))
     m   = VENT_RADIUS
-    return rng.uniform([m, m], [WIDTH - m, HEIGHT - m], size=(n, 2)).astype(np.float32)
+    max_x = COASTLINE_X  # allow vents right up to the beach
+    return rng.uniform([m, m], [max_x, HEIGHT - m], size=(n, 2)).astype(np.float32)
 
 
 _R_MIN = 2.0  # avoid singularity at centre

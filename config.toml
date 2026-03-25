@@ -5,6 +5,7 @@
 [world]
 width          = 700
 height         = 700
+coastline_x    = 350        # land > 350
 food_count     = 100
 max_pop        = 4096
 n_start        = 12         # primordial soup
@@ -17,6 +18,7 @@ vent_radius    = 150.0      # food spawns within this radius; density ∝ 1/r²
 start       = 120.0
 max         = 200.0
 food        = 4.0       # energy per food item (flat — density does the work)
+sunlight    = 0.25      # energy per tick per land cell (divided among occupants)
 mouth_min        = 1.0   # tiny mouth — hard to eat
 mouth_max        = 8.0   # huge mouth — filter feeder
 energy_max_min   = 150.0 # lean — can't store much
@@ -75,7 +77,7 @@ contact_rate_max = 0.02    # regular contact exchange
 
 [metabolism]
 energy_max_scale = 10.0    # energy_max = energy_max_scale × size²  (storage ∝ volume)
-drain_scale     = 0.015   # basal drain = drain_scale × size^0.75  (Kleiber's law)
+drain_scale     = 0.010   # basal drain = drain_scale × size^0.75  (Kleiber's law)
 size_tax        = 0.0003  # energy -= size² × size_tax per tick       (big = expensive)
 speed_tax       = 0.004   # energy -= speed² × speed_tax per tick    (fast = expensive)
 age_tax         = 0.0005  # energy *= (1 - age_tax) per tick         (entropy / lifespan cap)
