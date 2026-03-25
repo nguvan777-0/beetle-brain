@@ -160,7 +160,13 @@ def main():
         surf.fill((10, 10, 18))
         draw_food(surf, world['food'], world['vents'])
 
-        _draw_organisms(surf, pop, world['phylo'], sel_idx)
+        # Compute common anc_ids to share between functions
+        anc_ids = None
+        if len(pop['x']) > 0:
+            depth = max(4, int(pop['generation'].max()) // 3)
+            anc_ids = phylo.ancestor_at(pop['individual_id'], depth, world['phylo'])
+            
+        _draw_organisms(surf, pop, world['phylo'], sel_idx, anc_ids=anc_ids)
 
         pca_proj = _pca_proj(pop['W_body']) if len(pop['x']) > 0 else None
         sel_wb   = pop['W_body'][sel_idx].copy() if sel_idx is not None and sel_idx < len(pop['x']) else None
@@ -168,19 +174,21 @@ def main():
         draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                    history, lineage_hist, hall_fame, speed,
                    vents=world['vents'], phylo_state=world['phylo'], seed=world.get('seed'),
-                   pca_proj=pca_proj, sel_W_body=sel_wb)
+                   pca_proj=pca_proj, sel_W_body=sel_wb, anc_ids=anc_ids)
 
         pygame.display.flip()
         clock.tick(FPS)
 
 
-def _draw_organisms(surf, pop, phylo_state, sel_idx):
+def _draw_organisms(surf, pop, phylo_state, sel_idx, anc_ids=None):
     if sel_idx is not None and sel_idx < len(pop['x']):
         draw_rays(surf, pop['x'][sel_idx], pop['y'][sel_idx],
                   pop['fov'][sel_idx], pop['angle'][sel_idx], pop['ray_len'][sel_idx])
     if len(pop['x']) > 0:
-        depth       = max(4, int(pop['generation'].max()) // 3)
-        anc_ids     = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
+        if anc_ids is None:
+            depth   = max(4, int(pop['generation'].max()) // 3)
+            anc_ids = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
+        
         halo_colors = [_anc_color(int(a), phylo_state) for a in anc_ids]
         for i in range(len(pop['x'])):
             draw_organism(surf, pop['x'][i], pop['y'][i], pop['angle'][i],

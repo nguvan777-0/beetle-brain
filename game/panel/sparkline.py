@@ -2,6 +2,17 @@
 import pygame
 
 
+from functools import lru_cache
+
+_font_tiny = None
+
+@lru_cache(maxsize=128)
+def _render_spark_text(text, color):
+    global _font_tiny
+    if _font_tiny is None:
+        _font_tiny = pygame.font.SysFont("monospace", 10)
+    return _font_tiny.render(text, True, color)
+
 def draw_sparkline(surf, data, rect, color, mn=None, mx=None):
     if len(data) < 2:
         return
@@ -15,6 +26,7 @@ def draw_sparkline(surf, data, rect, color, mn=None, mx=None):
         for i, v in enumerate(data)
     ]
     pygame.draw.lines(surf, color, False, pts, 1)
-    font_tiny = pygame.font.SysFont("monospace", 10)
-    lbl = font_tiny.render(f"{data[-1]:.2f}", True, color)
+    
+    text = f"{data[-1]:.2f}"
+    lbl = _render_spark_text(text, color)
     surf.blit(lbl, (x0 + w + 3, y0 + h // 2 - 5))
