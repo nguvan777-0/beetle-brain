@@ -7,6 +7,7 @@ with open(_cfg_path, "rb") as _f:
     _cfg = tomllib.load(_f)
 
 WIDTH, HEIGHT   = _cfg["world"]["width"],  _cfg["world"]["height"]
+COASTLINE_X     = _cfg["world"].get("coastline_x", WIDTH // 2)
 N_FOOD          = _cfg["world"]["food_count"]
 N_START         = _cfg["world"]["n_start"]
 MAX_POP         = _cfg["world"]["max_pop"]
@@ -23,6 +24,7 @@ SIZE_MIN        = _cfg["traits"]["size_min"];  SIZE_MAX   = _cfg["traits"]["size
 ENERGY_START      = _cfg["energy"]["start"]
 ENERGY_MAX        = _cfg["energy"]["max"]
 ENERGY_FOOD       = _cfg["energy"]["food"]
+ENERGY_SUNLIGHT   = _cfg["energy"].get("sunlight", 0.05)
 MOUTH_MIN         = _cfg["energy"]["mouth_min"]
 MOUTH_MAX         = _cfg["energy"]["mouth_max"]
 ENERGY_MAX_MIN    = _cfg["energy"]["energy_max_min"]

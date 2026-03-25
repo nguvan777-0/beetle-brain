@@ -189,6 +189,6 @@ class StatsCollector:
             'tps':           session_ticks / elapsed if elapsed > 0 else 0,
             'extinct':       extinct,
             'final_pop':     len(pop['x']) if pop is not None and not extinct else 0,
-            'final_max_gen': int(pop['generation'].max()) if pop is not None and not extinct else 0,
+            'final_max_gen': int(pop['generation'].max()) if pop is not None and len(pop.get('generation', [])) > 0 else 0,
             'seed':          seed,
         }

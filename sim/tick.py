@@ -2,7 +2,7 @@
 import numpy as np
 from sim.config import (
     WIDTH, HEIGHT, N_FOOD, MAX_POP,
-    ENERGY_FOOD,
+    ENERGY_FOOD, COASTLINE_X, ENERGY_SUNLIGHT,
     ENERGY_MAX_SCALE, DRAIN_SCALE, SIZE_TAX, SPEED_TAX, AGE_TAX, SENSING_TAX, BRAIN_TAX
 )
 from sim.vents import refill_vents
@@ -41,6 +41,27 @@ def tick(world, rng):
                       + pop['size']**2          * SIZE_TAX
                       + pop['ray_len'] * pop['fov'] * SENSING_TAX
                       + pop['active_neurons']**1.5  * BRAIN_TAX)
+
+    # ── sunlight (land only) ─────────────────────────────────────────────────
+    if ENERGY_SUNLIGHT > 0:
+        land_mask = pop['x'] >= COASTLINE_X
+        if land_mask.any():
+            from sim.grid.constants import GRID_SCALE, GH, GW
+            cx = np.clip((pop['x'][land_mask] * GRID_SCALE).astype(np.int32), 0, GW - 1)
+            cy = np.clip((pop['y'][land_mask] * GRID_SCALE).astype(np.int32), 0, GH - 1)
+
+            # Flat grid indices for unique matching
+            flat_idx = cy * GW + cx
+            unique_cells, inv_idx, counts = np.unique(flat_idx, return_inverse=True, return_counts=True)
+
+            # Divide sunlight fairly among all occupants of the cell
+            gain = ENERGY_SUNLIGHT / counts[inv_idx]
+
+            # Add to energy arrays (doing it via mask)
+            energy_gain = np.zeros(len(pop['x']), dtype=np.float32)
+            energy_gain[land_mask] = gain
+            pop['energy'] += energy_gain
+
     pop['energy'] *= (1.0 - AGE_TAX)
     pop['age']    += 1
 
