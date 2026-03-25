@@ -34,13 +34,16 @@ def sense(pop, grid):
 
     ray_len_pix = np.maximum(pop['ray_len'] * GRID_SCALE, 1.0)   # blind wights get 0 signal, not NaN
 
+    # per-organism ray activity mask: only rays 0..n_rays[i]-1 are active
+    ray_active = (np.arange(N_RAYS)[None, :] < pop['n_rays'][:, None]).astype(np.float32)  # (N, N_RAYS)
+
     def _first_hit(hits):
         has_hit  = hits.any(axis=2)
         hit_step = np.argmax(hits, axis=2).astype(np.float32) + 1.0
         dist     = np.where(has_hit, hit_step, ray_len_pix[:, None])
         return np.clip(dist / ray_len_pix[:, None], 0.0, 1.0)
 
-    inputs[:, 0:N_RAYS * 2:2] = 1.0 - _first_hit(food_hits)
-    inputs[:, 1:N_RAYS * 2:2] = 1.0 - _first_hit(org_hits)
+    inputs[:, 0:N_RAYS * 2:2] = (1.0 - _first_hit(food_hits)) * ray_active
+    inputs[:, 1:N_RAYS * 2:2] = (1.0 - _first_hit(org_hits))  * ray_active
     inputs[:, -1]             = pop['energy'] / (ENERGY_MAX_SCALE * pop['size'] ** 2)
     return inputs
