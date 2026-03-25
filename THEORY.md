@@ -1,181 +1,100 @@
-# long-run analysis — where wights end up
+# growing a brain from the ground up
 
-This is not a simulation of evolution as a metaphor. It's evolution running. The same
-forces that shaped every living thing — selection, drift, mutation, horizontal gene
-transfer — are operating here, on a genome you can read, at a speed you can watch.
+A wight is its weights. The weights are the organism — body and brain, all 222 floats.
+Mutate them, cross them over, let selection filter. No fitness function, no reward
+signal, no loss. Just survival.
 
-The questions are real. Will sex emerge from HGT? Will predators evolve to eat their
-prey's adaptations wholesale? Will memory crystallize in the RNN after enough generations?
-Biology spent 4 billion years answering these. We get to watch them unfold in minutes.
-
-You can't predict the exact path. Two populations that differ by one mutation bit
-diverge completely within a few thousand ticks — that's not a bug, it's the mechanism.
-Evolution is a random walk biased by selection.
-
-But you can predict the attractors — the stable states the population gets pulled toward
-and stays in, like a ball rolling into a valley.
+We already did the first part. Wights go from aimless to hunters. That's proven.
 
 ---
 
-## ESS for size
+## what we've proven
 
-An Evolutionarily Stable Strategy is a trait value no mutant can invade.
+Start: 12 random wights, random RNN weights, random movement.
 
-**The predation rule:** size_predator > pred_ratio × size_prey (pred_ratio ∈ [1.05, 2.0])
+The brain is an Elman RNN — no bias, no architecture tricks:
 
-In a monomorphic population at size s*, a mutant with size > pred_ratio × s* eats everyone.
-A mutant with size < s*/pred_ratio gets eaten by everyone.
-
-**Cost of being large:** drain = `0.015 × size^0.75` (Kleiber). But energy capacity
-= `10 × size²`. Reserve time ∝ `size² / size^0.75 = size^1.25`. Larger wights have
-proportionally *more* energy buffer. There is no size cost that outweighs the predation
-advantage. **The ESS for size is SIZE_MAX = 9.0.** Corner solution.
-
-The only brake is frequency-dependence: if everyone is max size, no one can eat each other,
-and small food-eaters survive. That's size dimorphism — large predators coexisting with
-small food-eaters. Natural ecosystems exactly.
-
-**To force dimorphism:** reduce `food_count` below ~80. Below that, pure food-eating can't
-sustain a wight, predation becomes mandatory, runaway size selection collapses diversity.
-The default 100 is in the coexistence zone.
-
----
-
-## neutral genes and drift
-
-`weight_decay` carries no selection pressure — aging is metabolic, not genetic.
-It drifts freely under mutation, unconstrained by fitness. Over long runs it distributes
-uniformly across its range.
-
-This is useful. A neutral gene is a clock. If `weight_decay` is flat after 100k ticks
-but `mutation_rate` is sharply peaked, you're seeing selection in action on `mutation_rate`
-against a clean drift baseline. Real population genetics uses neutral markers exactly
-this way — microsatellites, synonymous substitutions. `weight_decay` is that here.
-
----
-
-## ESS for HGT rates
-
-`hgt_eat_rate` and `hgt_contact_rate` are genome genes. Their ESS depends on genetic
-diversity in the population.
-
-**Cost:** crossover with a random genome is usually destructive. A well-adapted wight
-incorporating a stranger's W1/W2 likely breaks its foraging behavior. Cost is proportional
-to genetic distance from the donor.
-
-**Benefit:** HGT can spread beneficial mutations across lineage boundaries — faster than
-waiting for the same mutation to arise twice independently.
-
-In a genetically uniform population, HGT is pure noise. Both rates drift toward zero.
-In stable predator-prey dimorphism, prey evolve novel evasion strategies. Predators that
-incorporate prey genome via predation literally eat the prey's adaptations — Red Queen
-dynamics without parasites. The predation arms race has a metabolic shortcut.
-
-Expected long-run: `hgt_eat_rate` stabilizes somewhere in [0.01, 0.05] for carnivores.
-`hgt_contact_rate` stays near the minimum unless dense clustering emerges around vents.
-
-**The proto-sex question:** sex is HGT with mate choice. If `hgt_contact_rate` evolves
-upward and wights cluster near genetically diverse populations to exchange genes, that's
-proto-conjugation. Whether it emerges here is the experiment.
-
----
-
-## phase transition: when does size monoculture break?
-
-There's a critical food density ρ* where food-eating outcompetes predation.
-Below ρ*, predation wins → size → 9. Above ρ*, food-eating wins → size shrinks.
-
-Rough estimate with current params (ray_len ≈ 90, fov ≈ 90° ≈ 1.57 rad, speed ≈ 2.2):
-
-```
-area swept per tick ≈ ray_len × fov × speed  =  90 × 1.57 × 2.2  ≈  311 units
-food density  =  100 / (700 × 700)  ≈  0.000204 per unit²
-food/tick     ≈  311 × 0.000204  ≈  0.063 pellets
-energy/tick   ≈  0.063 × 4  -  0.06  ≈  +0.19 net
+```python
+h_t   = tanh(x_t @ W1 + h_{t-1})   # (N_HIDDEN,) = (N_INPUTS,) @ (N_INPUTS, N_HIDDEN)
+out_t = tanh(h_t @ W2)              # (N_OUTPUTS,) — turn and speed
 ```
 
-Food-eating alone is barely viable. Current 100 food_count is close to the threshold —
-the coexistence zone is narrow. This is why color divergence is possible: a small, dim
-food-eater is a valid strategy if the big predators aren't scanning the right areas.
+222 floats total. 18 body, 180 for W1, 24 for W2. That's the whole organism.
+
+Within a few thousand ticks, some wights are tracking and killing prey. W1 and W2
+evolved to make hunting the output of that recurrence. The hidden state is carrying
+something real across ticks. You can watch it happen.
 
 ---
 
-## FOV: where it's headed
+## what follows from a working substrate
 
-Narrow FOV tracks a known target better. Wide FOV catches peripheral movement.
+**Niche partitioning.** Competing lineages split the resource space to avoid direct
+competition — different prey sizes, different vent territories, different hunting
+strategies. A 12-dimensional h_state can only encode one strategy well. Once two
+predator lineages both evolve pursuit, selection pushes them apart. Character
+displacement — not designed, selected.
 
-As predation dominates energy intake, selection pushes toward narrower FOV — 7 rays
-concentrated forward beats 7 rays spread over 162° for tracking moving prey.
+**Cognitive speciation.** HGT transplants brain weights across lineages. But as W1/W2
+diverge, transplants become incoherent — a recipient brain can't use donor output
+weights built for a different input encoding. At some divergence threshold, gene flow
+ceases. Speciation from cognitive incompatibility, not geography.
 
-Expected long-term floor: **~35–50°**. Below that, prey moving at ~2 units/tick at
-~90 unit detection range crosses between adjacent rays faster than the wight can turn.
+**The Red Queen.** Prey evolve evasion circuits. Predators evolve better pursuit
+circuits. Each improvement degrades the other's fitness — continuous co-evolution with
+no stable endpoint. A predator can absorb the prey's evasion circuit via HGT and use
+it offensively.
 
-In a food-dominated world (high food_count), wide FOV wins. Watch it toggle.
-
----
-
-## color: the most uncertain prediction
-
-Color is the hardest to predict long-term because it's a co-evolutionary arms race.
-Both the camouflage strategy and the detection strategy evolve simultaneously.
-
-Current pressure: bright wights (high r+g+b) have a larger predation detection radius
-(up to +9 units). This cuts both ways — bright predators find prey from further away,
-bright prey are spotted from further away.
-
-The stable states are:
-1. **Uniform dim** — everyone dark, detection radius collapses to size alone
-2. **Arms race to bright** — everyone bright, detection symmetric, net effect neutral
-3. **Dimorphism** — dim prey that evade detection + bright predators that hunt
-
-Which one the sim lands in is path-dependent. It depends which mutation hits first
-in which lineage. Now that founders start at their lineage hue, the initial color
-distribution is a rainbow — which state it converges to from that start is the question.
+**The Baldwin effect.** Behaviors carried in h_state via epigenetic inheritance can
+become hardwired in W1/W2 — the RNN learns to produce the behavior without needing the
+inherited state. `epigenetic` should evolve down when that happens. Learned → instinct,
+visible in the genome.
 
 ---
 
-## h_state: when does memory do something real?
+## what h_state actually encodes
 
-The recurrent hidden state (N_HIDDEN=12) persists across ticks and is partially
-inherited via `epigenetic` (∈ [0, 1]).
+Selection is sculpting W1/W2 to read and write h_state usefully. 12 floats per wight
+— opaque by default. The probe:
 
-For h_state to encode something interpretable — hunger, momentum, fear — the weights
-W1/W2 need to evolve to read and write it meaningfully. That requires selection on
-behaviors that span multiple ticks: remembering which direction food was last found,
-persisting a pursuit trajectory.
+```python
+# does any h_state dimension correlate with bearing to nearest vent?
+bearing = np.arctan2(vents[:, 1] - pop['y'][:, None],
+                     vents[:, 0] - pop['x'][:, None]).min(axis=1)
+np.corrcoef(pop['h_state'].T, bearing)  # (12, N) vs (N,)
+```
 
-This is also where HGT is most interesting. Crossover at the W1/W2 boundary produces
-a wight with one wight's input encoding and another's output mapping. Most are incoherent.
-The rare coherent ones are cognitively novel.
-
-Rough estimate: visible at **gen 50–200**. Below that, h_state is mutation noise.
-At ~600 ticks/sec headless, gen 100 is reachable in minutes.
+If a dimension correlates with vent bearing at gen 100 but not gen 10, the brain
+learned spatial memory. That's measurable.
 
 ---
 
-## long-run prediction summary
+## HGT as the propagation mechanism
 
-| trait            | predicted long-run          | mechanism                        |
-|------------------|-----------------------------|----------------------------------|
-| size             | 8.5–9.0 (corner)            | reserve time ∝ size^1.25         |
-| FOV              | 35–50°                      | prey tracking at observed speed  |
-| speed            | near current                | quadratic energy cost sweet spot |
-| hgt_eat_rate     | 0.01–0.05 for carnivores    | Red Queen via predation          |
-| hgt_contact_rate | near min unless clustering  | weaker signal, noisy             |
-| weight_decay     | flat / neutral              | vestigial, no selection pressure |
-| color            | path-dependent              | arms race from rainbow start     |
-| h_state          | meaningful at gen 100+      | selection on multi-tick behavior |
+```python
+g = np.concatenate([W_body, W1.flatten(), W2.flatten()])  # (222,)
+cut = rng.integers(1, 222)
+g_new = np.where(np.arange(222) >= cut, g_donor, g_recipient)
+```
+
+204 of 222 weights are brain. A predator that kills a wight with a better circuit
+absorbs part of it immediately — not through reproduction, through the kill. Cognitive
+adaptations spread horizontally across lineages as well as vertically through descent.
 
 ---
 
-## what "1 billion ticks" actually means
+## can selection grow a larger brain?
 
-At ~600 ticks/sec headless on Apple Silicon, 1 billion ticks = ~19 days of runtime.
+The brain is fixed at N_HIDDEN=12. In biology, brain size is under selection — complex
+environments grow large brains because the cognitive payoff outweighs the metabolic
+cost. Make N_HIDDEN evolvable, penalize it metabolically, and watch whether selection
+drives encephalization when the world demands it.
 
-The founding genome is irrelevant after ~170,000 ticks (a few minutes). By 1 billion
-ticks, the population has thermalized — the only surviving information is what selection
-kept. Weights distribute around the ESS attractors above, jittered by mutation and
-shuffled by HGT.
+What happens when the environment varies — vents that move, food that cycles? What
+happens when the world is complex enough to require multiple strategies — does the
+population partition into cognitive niches, speciate around incompatible brain
+encodings, run the Red Queen indefinitely?
 
-You can't predict which individual wight wins. You can predict the distribution
-they're drawn from.
+We have a system where these questions have real answers.
+
+Where do we go from here?
