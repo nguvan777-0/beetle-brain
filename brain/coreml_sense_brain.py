@@ -49,7 +49,8 @@ def init_sense_brain() -> bool:
                     meta.get("n_rays") == N_RAYS and
                     meta.get("max_steps") == MAX_STEPS and
                     meta.get("gw") == GW and meta.get("gh") == GH and
-                    meta.get("n_hid") == N_HIDDEN and meta.get("n_out") == N_OUTPUTS):
+                    meta.get("n_hid") == N_HIDDEN and meta.get("n_out") == N_OUTPUTS and
+                    meta.get("has_nrays_mask") is True):
                 _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.ALL)
                 _use_coreml = True
                 print(f"[SenseBrain] Loaded cached model ({MODEL_PATH.name})")
@@ -94,10 +95,11 @@ def _compile():
         mb.TensorSpec(shape=(B, N_HIDDEN, N_OUTPUTS)), # W2
         mb.TensorSpec(shape=(B, N_HIDDEN)),      # h_prev
         mb.TensorSpec(shape=(B, N_HIDDEN)),      # mask
+        mb.TensorSpec(shape=(B, N_RAYS * 2)),    # n_rays_mask: 1 for active ray channels, 0 for inactive
     ])
     def prog(x_pos, y_pos, angle, half_fov,
              ray_len_pix, size_pix, energy_frac,
-             food_grid, org_grid, W1, W2, h_prev, mask):
+             food_grid, org_grid, W1, W2, h_prev, mask, n_rays_mask):
 
         steps_k   = mb.const(val=steps_c)    # (S,)
         offsets_k = mb.const(val=offsets_c)  # (R,)
@@ -196,6 +198,7 @@ def _compile():
         org_e2  = mb.expand_dims(x=org_sig,  axes=[2])   # (B, R, 1)
         paired  = mb.concat(values=[food_e2, org_e2], axis=2)   # (B, R, 2)
         ray_inp = mb.reshape(x=paired, shape=[B, R * 2])        # (B, R*2)
+        ray_inp = mb.mul(x=ray_inp, y=n_rays_mask)              # zero inactive ray channels
         nrg_e   = mb.expand_dims(x=energy_frac, axes=[1])       # (B, 1)
         inputs  = mb.concat(values=[ray_inp, nrg_e], axis=1)    # (B, N_INPUTS)
 
@@ -220,6 +223,7 @@ def _compile():
     META_PATH.write_text(json.dumps({
         "max_pop": MAX_POP, "n_rays": N_RAYS, "max_steps": MAX_STEPS,
         "gw": GW, "gh": GH, "n_hid": N_HIDDEN, "n_out": N_OUTPUTS,
+        "has_nrays_mask": True,
     }))
     return ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.ALL)
 
@@ -267,6 +271,10 @@ def _predict(pop, food_grid, org_grid):
         
     mask = (np.arange(N_HIDDEN) < pop['active_neurons'][:, None]).astype(np.float32)
 
+    # per-organism ray activity mask: rays 0..n_rays[i]-1 active
+    ray_active   = (np.arange(N_RAYS)[None, :] < pop['n_rays'][:, None]).astype(np.float32)  # (n, R)
+    n_rays_mask  = np.repeat(ray_active, 2, axis=1)  # (n, R*2): food/org interleaved
+
     r = _model.predict({
         'x_pos':       _pad1(pop['x']),
         'y_pos':       _pad1(pop['y']),
@@ -281,5 +289,6 @@ def _predict(pop, food_grid, org_grid):
         'W2':          _padn(pop['W2']),
         'h_prev':      _padn(pop['h_state']),
         'mask':        _padn(mask),
+        'n_rays_mask': _padn(n_rays_mask),
     })
     return r['h_new'][:n], r['out'][:n]

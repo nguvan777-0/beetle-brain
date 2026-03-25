@@ -10,10 +10,10 @@ from sim.config import (
     MOUTH_MIN, MOUTH_MAX,
     PRED_RATIO_MIN, PRED_RATIO_MAX,
     HGT_EAT_MIN, HGT_EAT_MAX, HGT_CONTACT_MIN, HGT_CONTACT_MAX,
-    N_HIDDEN,
+    N_HIDDEN, N_RAYS,
 )
 
-N_BODY = 19  # number of body genome weights
+N_BODY = 20  # number of body genome weights
 
 
 def sig(x):
@@ -39,7 +39,8 @@ def decode(W_body):
         'pred_ratio':    (PRED_RATIO_MIN    + s[:, 15] * (PRED_RATIO_MAX    - PRED_RATIO_MIN)).astype(np.float32),
         'hgt_eat_rate':  (HGT_EAT_MIN      + s[:, 16] * (HGT_EAT_MAX      - HGT_EAT_MIN)).astype(np.float32),
         'hgt_contact_rate': (HGT_CONTACT_MIN + s[:, 17] * (HGT_CONTACT_MAX - HGT_CONTACT_MIN)).astype(np.float32),
-        'active_neurons': np.maximum(1, (s[:, 18] * N_HIDDEN).astype(np.int32)),  # map 0-1 directly to 1-32 neurons
+        'active_neurons': (s[:, 18] * N_HIDDEN).astype(np.int32),       # 0..N_HIDDEN; 0 = straight-line rover (no brain)
+        'n_rays':        (s[:, 19] * (N_RAYS + 1)).astype(np.int32),        # 0..N_RAYS; 0 = blind
         'r':             (40 + s[:, 4] * 215).astype(np.int32),
         'g':             (40 + s[:, 5] * 215).astype(np.int32),
         'b':             (40 + s[:, 6] * 215).astype(np.int32),

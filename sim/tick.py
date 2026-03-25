@@ -40,7 +40,7 @@ def tick(world, rng):
                       + speeds**2               * SPEED_TAX
                       + np.abs(turns) * pop['size'] * TURN_TAX
                       + pop['size']**2          * SIZE_TAX
-                      + pop['ray_len'] * pop['fov'] * SENSING_TAX
+                      + pop['n_rays'] * pop['ray_len'] * pop['fov'] * SENSING_TAX
                       + pop['active_neurons']**1.5  * BRAIN_TAX)
 
     # ── sunlight (land only) ─────────────────────────────────────────────────
