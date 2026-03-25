@@ -21,9 +21,11 @@ HIST_MAX    = 300
 
 
 def _pca_proj(W_body):
-    """(N, 18) → (N, 2): project onto top 2 PCs. Returns None if N < 3."""
-    if len(W_body) < 3:
+    """(N, 18) → (N, 2): project onto top 2 PCs."""
+    if len(W_body) == 0:
         return None
+    if len(W_body) == 1:
+        return np.zeros((1, 2), dtype=np.float32)
     W = W_body.astype(np.float32)
     W -= W.mean(axis=0)
     try:
@@ -160,7 +162,7 @@ def main():
 
         _draw_organisms(surf, pop, world['phylo'], sel_idx)
 
-        pca_proj = _pca_proj(pop['W_body']) if len(pop['x']) >= 3 else None
+        pca_proj = _pca_proj(pop['W_body']) if len(pop['x']) > 0 else None
         sel_wb   = pop['W_body'][sel_idx].copy() if sel_idx is not None and sel_idx < len(pop['x']) else None
 
         draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
