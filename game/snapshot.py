@@ -1,7 +1,7 @@
 """Save and load world snapshots to/from disk."""
 import os
 import numpy as np
-from sim.config import N_HIDDEN, N_INPUTS
+from sim.config import N_HIDDEN, N_INPUTS, N_OUTPUTS
 from sim.population.genome import decode, N_BODY
 from sim.vents import make_vents
 from sim import phylo
@@ -17,7 +17,7 @@ def save_snapshot(world, tick, history, hall_fame):
     phylo_state = world['phylo']
     np.savez_compressed(SNAPSHOT_PATH,
         x=pop['x'], y=pop['y'], angle=pop['angle'], energy=pop['energy'],
-        W_body=pop['W_body'], W1=pop['W1'], W2=pop['W2'], Wh=pop['Wh'],
+        W_body=pop['W_body'], W1=pop['W1'], W2=pop['W2'], Wh=pop['Wh'], b1=pop['b1'], b2=pop['b2'],
         h_state=pop['h_state'],
         generation=pop['generation'], age=pop['age'], eaten=pop['eaten'],
         lineage_id=pop['lineage_id'], individual_id=pop['individual_id'],
@@ -55,6 +55,10 @@ def load_snapshot(rng):
         'W2':          d['W2'].astype(np.float32),
         'Wh':          (d['Wh'].astype(np.float32) if 'Wh' in d
                         else np.zeros((n, N_HIDDEN, N_HIDDEN), dtype=np.float32)),
+        'b1':          (d['b1'].astype(np.float32) if 'b1' in d
+                        else np.zeros((n, N_HIDDEN),  dtype=np.float32)),
+        'b2':          (d['b2'].astype(np.float32) if 'b2' in d
+                        else np.zeros((n, N_OUTPUTS), dtype=np.float32)),
         **t,
         'generation':  d['generation'].astype(np.int32),
         'age':         d['age'].astype(np.int32),

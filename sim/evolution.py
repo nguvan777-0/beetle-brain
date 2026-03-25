@@ -23,6 +23,8 @@ def clone_batch(pop, idx, rng, phylo_state):
     W1     = _mutate(pop['W1'][idx],     (n, N_INPUTS, N_HIDDEN),  2)
     W2     = _mutate(pop['W2'][idx],     (n, N_HIDDEN, N_OUTPUTS), 2)
     Wh     = _mutate(pop['Wh'][idx],     (n, N_HIDDEN, N_HIDDEN),  2)
+    b1     = _mutate(pop['b1'][idx],     (n, N_HIDDEN),            1)
+    b2     = _mutate(pop['b2'][idx],     (n, N_OUTPUTS),           1)
 
     t   = decode(W_body)
     ang = pop['angle'][idx] + np.pi + rng.uniform(-0.5, 0.5, n).astype(np.float32)
@@ -32,7 +34,7 @@ def clone_batch(pop, idx, rng, phylo_state):
         'y':          (pop['y'][idx] + np.sin(ang) * (pop['size'][idx] * 2 + 2)) % HEIGHT,
         'angle':      ang,
         'energy':     pop['clone_with'][idx].copy(),
-        'W_body': W_body, 'W1': W1, 'W2': W2, 'Wh': Wh,
+        'W_body': W_body, 'W1': W1, 'W2': W2, 'Wh': Wh, 'b1': b1, 'b2': b2,
         **t,
         'generation':    (pop['generation'][idx] + 1).astype(np.int32),
         'age':           np.zeros(n, dtype=np.int32),
