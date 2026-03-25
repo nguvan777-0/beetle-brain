@@ -41,6 +41,8 @@ N_HIDDEN        = _cfg["brain"]["n_hidden"]
 N_OUTPUTS       = _cfg["brain"]["n_outputs"]
 N_INPUTS        = N_RAYS * 2 + 1
 
+BRAIN_TAX       = _cfg["metabolism"].get("brain_tax", 0.0002)
+
 MUTATION_RATE_MIN  = _cfg["evolution"]["mutation_rate_min"]
 MUTATION_RATE_MAX  = _cfg["evolution"]["mutation_rate_max"]
 MUTATION_SCALE_MIN = _cfg["evolution"]["mutation_scale_min"]
