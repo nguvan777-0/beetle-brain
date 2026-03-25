@@ -36,9 +36,9 @@ clone_with_max = 85.0   # give offspring a lot
 # each trait is decoded from W_body via sigmoid into [min, max]
 speed_min   = 0.3
 speed_max   = 4.0
-fov_min     = 0.0       # radians — can evolve to zero (blind)
+fov_min     = 0.0       # radians — can evolve to zero (no vision)
 fov_max     = 2.83      # radians (~162 deg)
-ray_min     = 0.0       # units — can evolve to zero (blind)
+ray_min     = 0.0       # units — can evolve to zero (no vision)
 ray_max     = 180.0
 size_min    = 3.0
 size_max    = 9.0

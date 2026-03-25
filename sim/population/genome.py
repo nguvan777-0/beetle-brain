@@ -40,7 +40,7 @@ def decode(W_body):
         'hgt_eat_rate':  (HGT_EAT_MIN      + s[:, 16] * (HGT_EAT_MAX      - HGT_EAT_MIN)).astype(np.float32),
         'hgt_contact_rate': (HGT_CONTACT_MIN + s[:, 17] * (HGT_CONTACT_MAX - HGT_CONTACT_MIN)).astype(np.float32),
         'active_neurons': (s[:, 18] * N_HIDDEN).astype(np.int32),       # 0..N_HIDDEN; 0 = straight-line rover (no brain)
-        'n_rays':        (s[:, 19] * (N_RAYS + 1)).astype(np.int32),        # 0..N_RAYS; 0 = blind
+        'n_rays':        (s[:, 19] * (N_RAYS + 1)).astype(np.int32),        # 0..N_RAYS; 0 = no vision
         'r':             (40 + s[:, 4] * 215).astype(np.int32),
         'g':             (40 + s[:, 5] * 215).astype(np.int32),
         'b':             (40 + s[:, 6] * 215).astype(np.int32),

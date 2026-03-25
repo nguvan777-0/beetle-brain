@@ -1,78 +1,82 @@
 # Growing a brain from the ground up
 
-The wight is defined entirely by its weights. Both body and brain consist of 222 floats. 
-These values are mutated, crossed over, and filtered purely by selection. There is no fitness function, reward signal, or loss calculation—only survival.
+The wight is defined by its weights. Body and brain together are ~2,294 floats — mutated, crossed over, and filtered purely by selection. No fitness function, no reward signal, no loss calculation. Only survival.
 
-The first phase is complete: wights reliably evolve from aimless movement to active hunting.
+The first phase is complete: wights reliably evolve from aimless movement to active hunting. A coastline can split a population. Grazers emerge. Predators emerge. The brain shrinks when the environment lets it and grows when the environment demands it.
 
----
+The brain is an Elman RNN — hidden state carries across ticks, two outputs, turn and speed.
 
-## Observed behaviors
-
-Starting state: 12 random wights with randomized RNN weights and movement.
-
-The brain uses a simple Elman RNN with no biases or architectural tricks:
-
-```python
-h_t   = np.tanh(x_t @ W1 + h_prev)  # (N_HIDDEN,) = (N_INPUTS,) @ (N_INPUTS, N_HIDDEN)
-out_t = np.tanh(h_t @ W2)           # (N_OUTPUTS,) — turn and speed
+```
+h_new = tanh(x @ W1 + h_prev @ Wh + b1)
+out   = tanh(h_new @ W2 + b2)
 ```
 
-The organism is parameterized by exactly 222 floats: 18 for the body, 180 for W1, and 24 for W2.
-
-Within a few thousand ticks, tracking and hunting behaviors emerge. The weights W1 and W2 evolve to map inputs to pursuit outputs, utilizing the hidden state to retain information across ticks.
+`x` is the sensory input: up to 7 rays × 5 channels (food distance, organism distance, r/g/b) plus energy — 36 floats. `h_prev` is whatever the wight was thinking last tick. `W1`, `W2`, `Wh`, `b1`, `b2` all evolve. The recurrent connection is the memory.
 
 ---
 
-## Emergent dynamics
+## What we've seen
 
-**Niche partitioning.** Competing lineages naturally subdivide the resource space to minimize direct competition, adopting different prey targets, vent territories, or hunting strategies. Because a 12-dimensional hidden state has limited capacity, selection drives competing predator lineages apart into distinct strategies (character displacement).
+Size tips fast. FOV narrows. Grazers lose vision when food is free. A coastline can split a population — one lineage predatory with a full brain, one slow and nearly mindless running on sunlight.
 
-**Cognitive speciation.** Horizontal Gene Transfer (HGT) moves brain weights between lineages. As W1 and W2 diverge between lineages, these transplants become incoherent. A recipient brain cannot process donor output weights that expect a different input encoding. Once divergence reaches a critical threshold, gene flow stops, resulting in speciation driven by cognitive incompatibility rather than geography.
-
-**Red Queen dynamics.** Prey evolve evasion circuits, prompting predators to evolve better pursuit circuits. Each adaptation decreases the opposing lineage's survival rate, driving continuous co-evolution. Predators can also acquire prey evasion circuits via HGT and repurpose them defensively or offensively.
-
-**The Baldwin effect.** Behaviors initially maintained in the hidden state via epigenetic inheritance can become permanently hardwired into W1 and W2. When the RNN evolves to produce the behavior natively, reliance on inherited state (`epigenetic`) decreases. This shifts learned behavior into instinct encoded directly in the genome.
+The brain shrinks when the environment lets it. It grows when the environment demands it.
 
 ---
 
-## Decoding the hidden state
+## The brain grows when it has to
 
-Selection optimizes W1 and W2 to effectively read and write to the hidden state. While the 12 floats are opaque by default, they can be probed for correlations:
+`active_neurons` is an evolvable gene — it sets how many of the 32 hidden neurons are live each tick. A wight with `active_neurons=4` runs a tiny brain; one with `active_neurons=32` runs the full RNN. The cost scales superlinearly with brain size:
 
 ```python
-# Check if any hidden state dimension correlates with the bearing to the nearest vent:
-dx = vents[:, 0] - pop['x'][:, None]
-dy = vents[:, 1] - pop['y'][:, None]
-
-# Find the vent with the minimum distance squared
-nearest_idx = np.argmin(dx**2 + dy**2, axis=0)
-
-# Calculate bearing to that specific nearest vent
-bearing = np.arctan2(dy[nearest_idx, np.arange(len(pop))], 
-                     dx[nearest_idx, np.arange(len(pop))])
-
-np.corrcoef(pop['h_state'].T, bearing)  # (N_HIDDEN, N) vs (N,)
+drain = DRAIN_SCALE * pop['size'] ** 0.75   # Kleiber's law
+pop['energy'] -= (drain
+                  + speeds**2               * SPEED_TAX
+                  + np.abs(turns) * pop['size'] * TURN_TAX
+                  + pop['size']**2          * SIZE_TAX
+                  + pop['n_rays'] * pop['ray_len'] * pop['fov'] * SENSING_TAX
+                  + pop['active_neurons']**1.5  * BRAIN_TAX)
 ```
 
-Measuring these correlations across generations (e.g., gen 10 vs. gen 100) provides direct metrics for the development of spatial memory and other cognitive traits.
+Sight, motion, size, turning, thought — all on the same energy budget. A grazer parked near a vent needs almost nothing. A predator tracking prey across a coastline needs more. Every neuron has to earn its place.
 
 ---
 
-## HGT as a propagation mechanism
+## Boundaries
+
+Energy flows at edges. Coastlines, thermal vents, sunlight gradients — anywhere two regimes meet, selection sharpens. We place those edges deliberately. The steeper the gradient, the faster things diverge.
+
+---
+
+## HGT
+
+On each kill, the predator has a chance to absorb a slice of the victim's genome — brain weights included. `hgt_eat_rate` is an evolvable gene ranging from 0.5–15% per kill:
 
 ```python
-g = np.concatenate([W_body, W1.flatten(), W2.flatten()])  # Entire genome
-cut = rng.integers(1, len(g))
-g_new = np.where(np.arange(len(g)) >= cut, g_donor, g_recipient)
+g_r = np.concatenate([wb_r, w1_r.reshape(n, -1), w2_r.reshape(n, -1),
+                       wh_r.reshape(n, -1), b1_r, b2_r], axis=1)
+cuts = rng.integers(1, L, size=n)
+mask = np.arange(L)[None, :] >= cuts[:, None]   # True → take from donor
+g_new = np.where(mask, g_d, g_r)
 ```
 
-Brain weights make up 204 of the 222 total parameters. When a predator kills another wight, it immediately absorbs portions of the victim's genome. This allows advantageous cognitive circuits to spread horizontally across the population via predation, rather than strictly vertically through reproduction.
+A random cut point splits both genomes. The predator keeps everything before the cut and takes the prey's genome from cut to end. Useful circuits spread sideways through the population, not just down through offspring.
+
+Early in a run this pulls everything toward the winner. Later, as lineages diverge, transplanted weights stop making sense in a foreign brain. Gene flow stops. The speciation barrier isn't geography — it's cognitive incompatibility.
 
 ---
 
 ## Evolutionary scaling of brain size
 
-Currently, the brain is fixed at `N_HIDDEN=12`. In biological systems, brain size is subject to selection: complex environments favor larger brains because the cognitive advantages outweigh the metabolic costs.
+The current ceiling is 32 hidden neurons. That's a config value, not a law.
 
-By making `N_HIDDEN` evolvable and applying a metabolic penalty to it, the system can model encephalization. However, brains only grow when the environment demands it. Life thrives at the boundary between states—rivers, thermal gradients, and shifting biomes. We have to blast energy onto those boundaries. Future experiments will introduce dynamic terrain, moving vents, and cyclical food gradients, establishing the complex ecological boundaries required to drive the population toward larger brain capacities, deeper cognitive niches, and open-ended Red Queen co-evolution.
+`active_neurons` is already evolvable — selection sets the size, not us. The cost curve is superlinear (`active_neurons^1.5`), so every neuron has to earn its place. A world that doesn't demand complexity gets brains that shrink to zero. A world that does gets brains that grow until the energy runs out.
+
+The bet is that if the world is complex and diverse enough — more terrain, boundaries, efficient energy flow, moving gradients, prey that evade, predators that pursue — the brain scales on its own. We design the pressure, not the architecture.
+
+---
+
+## What we're watching
+
+- The hidden state saturates at ±1 early. What is it encoding? When does it start encoding something we'd recognize?
+- When does a wight stop reacting to other wights and start predicting them?
+- Bigger world, more terrain, seasonal vents, moving coastlines, a dozen ways to capture energy — what grows when the pressure never stops?
