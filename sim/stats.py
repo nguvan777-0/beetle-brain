@@ -179,7 +179,7 @@ class StatsCollector:
 
     # ── finalize ─────────────────────────────────────────────────────────────
 
-    def finalize(self, tick, elapsed, pop=None, phylo_state=None, extinct=False):
+    def finalize(self, tick, elapsed, pop=None, phylo_state=None, extinct=False, seed=None):
         if pop is not None and not extinct:
             self.record(tick, pop, phylo_state)
         session_ticks = tick - (self._tick_start or tick)
@@ -190,4 +190,5 @@ class StatsCollector:
             'extinct':       extinct,
             'final_pop':     len(pop['x']) if pop is not None and not extinct else 0,
             'final_max_gen': int(pop['generation'].max()) if pop is not None and not extinct else 0,
+            'seed':          seed,
         }

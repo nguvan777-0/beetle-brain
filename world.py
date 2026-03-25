@@ -68,7 +68,7 @@ else:
     print(f"{tick:,} ticks  {elapsed:.1f}s  {tick/elapsed:,.0f} t/s")
 
     stats.finalize(tick, elapsed, pop=pop if not extinct else None,
-                   phylo_state=world['phylo'], extinct=extinct)
+                   phylo_state=world['phylo'], extinct=extinct, seed=world.get('seed'))
 
     from report import generate
     generate(stats)

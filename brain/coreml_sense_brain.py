@@ -221,11 +221,6 @@ def _compile():
 
 # ── public inference ──────────────────────────────────────────────────────────
 
-# Below this population size numpy sense + CoreML brain is faster —
-# O(N) beats the fixed MAX_POP overhead of the fused GPU dispatch.
-_GPU_THRESHOLD = MAX_POP // 8   # ≈512 wights
-
-
 def run_sense_brain(pop: dict, food_grid: np.ndarray, org_grid: np.ndarray
                     ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -233,10 +228,11 @@ def run_sense_brain(pop: dict, food_grid: np.ndarray, org_grid: np.ndarray
     food_grid / org_grid: (GH, GW) float32 from paint_grid.
     Returns (h_new, out) identical to run_brain.
 
-    Routes to the fused GPU model when N >= _GPU_THRESHOLD (O(1) wall-clock),
-    falls back to numpy sense + CoreML brain for small populations.
+    Always routes to the fused GPU model when available — O(1) wall-clock
+    regardless of population size (single MAX_POP kernel dispatch).
+    Falls back to numpy sense + CoreML brain only if the model failed to load.
     """
-    if _use_coreml and _model is not None and len(pop['x']) >= _GPU_THRESHOLD:
+    if _use_coreml and _model is not None:
         return _predict(pop, food_grid, org_grid)
     from sim.sensing import sense
     from brain.coreml_brain import run_brain
