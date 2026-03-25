@@ -99,7 +99,7 @@ uv run --with numpy --with coremltools --with plotly python world.py 60
 
 First run compiles the CoreML model (~1s), cached to `build/brain.mlpackage`.
 
-**Keys:** `SPACE` cycle speed (1×/5×/20×/headless) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
+**Keys:** `SPACE` cycle speed (1×/5×/20×/100×/1000×/headless) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
 ## run report
 

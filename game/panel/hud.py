@@ -146,26 +146,15 @@ def _anc_color(ancestor_id: int, phylo_state) -> tuple:
     return _hue_to_rgb(phylo_state['hue'][int(ancestor_id) % M])
 
 
-def _draw_pca_scatter(surf, pop, rect, phylo_state):
-    """Project W_body onto top 2 PCs; colour each dot by phylogenetic sub-lineage.
-
-    Uses phylo.ancestor_at(individual_id, _PHYLO_DEPTH) so wights that share
-    a recent common ancestor get the same hue — diverging sub-populations
-    naturally get different colours without any threshold decision.
-    """
-    if len(pop['x']) < 3:
+def _draw_pca_scatter(surf, pop, rect, phylo_state, pca_proj):
+    """Draw pre-computed PCA projection; colour by phylogenetic sub-lineage."""
+    if pca_proj is None or len(pca_proj) < 3:
         return
     rx, ry, rw, rh = rect
     pygame.draw.rect(surf, (10, 10, 20), rect)
     pygame.draw.rect(surf, (40, 40, 60), rect, 1)
 
-    W = pop['W_body'].astype(np.float32)
-    W -= W.mean(axis=0)
-    try:
-        _, _, Vt = np.linalg.svd(W, full_matrices=False)
-    except np.linalg.LinAlgError:
-        return
-    proj = W @ Vt[:2].T          # (N, 2)
+    proj = pca_proj   # (N, 2) — already computed in sim thread
 
     lo  = proj.min(axis=0)
     hi  = proj.max(axis=0)
@@ -216,7 +205,7 @@ def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
 
 def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                history, lineage_history, hall_fame, sim_speed=1, vents=None, phylo_state=None,
-               seed=None):
+               seed=None, pca_proj=None, sel_W_body=None):
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
@@ -277,7 +266,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
         # ── PCA scatter ──────────────────────────────────────────────────────
         txt("STRATEGY SPACE  (W_body PCA)", font, (160, 180, 220))
-        _draw_pca_scatter(surf, pop, (px + 8, y, PANEL_W - 16, 130), phylo_state)
+        _draw_pca_scatter(surf, pop, (px + 8, y, PANEL_W - 16, 130), phylo_state, pca_proj)
         y += 134
         sep()
 
@@ -315,9 +304,10 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         bw    = (PANEL_W - 20) // N_BODY
         bar_x = px + 10
         bar_y = y
+        genome = sel_W_body if sel_W_body is not None else []
         for j, (lbl, w_val) in enumerate(zip(
             ["spd", "fov", "ray", "sz", "r", "g", "b", "trn", "brd"],
-            pop['W_body'][sel_idx],
+            genome,
         )):
             h_bar     = int(abs(float(w_val)) * 12)
             color_bar = (100, 200, 100) if w_val > 0 else (200, 80, 80)
