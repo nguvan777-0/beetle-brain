@@ -168,7 +168,7 @@ def _draw_pca_scatter(surf, pop, rect, phylo_state, pca_proj):
     global _pca_surf_cache
     rx, ry, rw, rh = rect
 
-    if pca_proj is None or len(pca_proj) < 3:
+    if pca_proj is None or len(pca_proj) == 0:
         if _pca_surf_cache is not None:
             surf.blit(_pca_surf_cache, (rx, ry))
         return
@@ -185,9 +185,21 @@ def _draw_pca_scatter(surf, pop, rect, phylo_state, pca_proj):
 
     lo  = proj.min(axis=0)
     hi  = proj.max(axis=0)
-    span = (hi - lo).clip(min=1e-6)
-    xs  = 4 + ((proj[:, 0] - lo[0]) / span[0] * (rw - 8)).astype(int)
-    ys  = 4 + ((proj[:, 1] - lo[1]) / span[1] * (rh - 8)).astype(int)
+    span = (hi - lo)
+    
+    # Center points if there's no variance
+    xs = np.zeros(len(proj), dtype=int)
+    ys = np.zeros(len(proj), dtype=int)
+    
+    if span[0] < 1e-6:
+        xs[:] = rw // 2
+    else:
+        xs[:] = 4 + ((proj[:, 0] - lo[0]) / span[0] * (rw - 8)).astype(int)
+        
+    if span[1] < 1e-6:
+        ys[:] = rh // 2
+    else:
+        ys[:] = 4 + ((proj[:, 1] - lo[1]) / span[1] * (rh - 8)).astype(int)
 
     depth                  = max(4, int(pop['generation'].max()) // 3)
     ancestors              = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
