@@ -93,10 +93,11 @@ def _compile():
         mb.TensorSpec(shape=(B, N_INPUTS, N_HIDDEN)),  # W1
         mb.TensorSpec(shape=(B, N_HIDDEN, N_OUTPUTS)), # W2
         mb.TensorSpec(shape=(B, N_HIDDEN)),      # h_prev
+        mb.TensorSpec(shape=(B, N_HIDDEN)),      # mask
     ])
     def prog(x_pos, y_pos, angle, half_fov,
              ray_len_pix, size_pix, energy_frac,
-             food_grid, org_grid, W1, W2, h_prev):
+             food_grid, org_grid, W1, W2, h_prev, mask):
 
         steps_k   = mb.const(val=steps_c)    # (S,)
         offsets_k = mb.const(val=offsets_c)  # (R,)
@@ -201,7 +202,11 @@ def _compile():
         # ── Elman RNN ─────────────────────────────────────────────────────────
         x_e   = mb.expand_dims(x=inputs, axes=[-2])                          # (B, 1, N_INPUTS)
         h_raw = mb.squeeze(x=mb.matmul(x=x_e, y=W1), axes=[-2])             # (B, N_HIDDEN)
-        h_new = mb.tanh(x=mb.add(x=h_raw, y=h_prev), name='h_new')         # (B, N_HIDDEN)
+        h_new = mb.tanh(x=mb.add(x=h_raw, y=h_prev), name='h_new_raw')       # (B, N_HIDDEN)
+        
+        # Apply biological capacity mask
+        h_new = mb.mul(x=h_new, y=mask, name='h_new')                        # (B, N_HIDDEN)
+
         h_e2  = mb.expand_dims(x=h_new, axes=[-2])                           # (B, 1, N_HIDDEN)
         out   = mb.tanh(x=mb.squeeze(x=mb.matmul(x=h_e2, y=W2), axes=[-2]),
                         name='out')                                           # (B, N_OUTPUTS)
@@ -259,6 +264,8 @@ def _predict(pop, food_grid, org_grid):
             return arr.astype(np.float32)
         pad = np.zeros((MAX_POP - n,) + arr.shape[1:], dtype=np.float32)
         return np.concatenate([arr.astype(np.float32), pad])
+        
+    mask = (np.arange(N_HIDDEN) < pop['active_neurons'][:, None]).astype(np.float32)
 
     r = _model.predict({
         'x_pos':       _pad1(pop['x']),
@@ -273,5 +280,6 @@ def _predict(pop, food_grid, org_grid):
         'W1':          _padn(pop['W1']),
         'W2':          _padn(pop['W2']),
         'h_prev':      _padn(pop['h_state']),
+        'mask':        _padn(mask),
     })
     return r['h_new'][:n], r['out'][:n]

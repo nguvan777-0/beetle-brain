@@ -43,7 +43,7 @@ size_max    = 9.0
 
 [brain]
 n_rays      = 7         # number of vision rays
-n_hidden    = 12        # hidden layer size (also h_state size)
+n_hidden    = 32        # absolute maximum biological capacity for hidden neurons
 n_outputs   = 2         # turn, speed
 
 [evolution]
@@ -80,3 +80,4 @@ size_tax        = 0.0003  # energy -= size² × size_tax per tick       (big = e
 speed_tax       = 0.004   # energy -= speed² × speed_tax per tick    (fast = expensive)
 age_tax         = 0.0005  # energy *= (1 - age_tax) per tick         (entropy / lifespan cap)
 sensing_tax     = 0.00004 # energy -= ray_len × fov × sensing_tax    (sight = expensive)
+brain_tax       = 0.0002  # energy -= brain_tax × active_neurons^1.5 (thought = expensive)
