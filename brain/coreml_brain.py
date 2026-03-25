@@ -59,7 +59,7 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
             meta = json.loads(META_PATH.read_text())
             if (meta.get("max_pop") == max_pop and meta.get("n_in")  == n_inputs
                     and meta.get("n_hid") == n_hidden and meta.get("n_out") == n_outputs
-                    and meta.get("recurrent") == True):
+                    and meta.get("recurrent") == True and meta.get("has_wh") == True):
                 _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
                 _use_coreml = True
                 print(f"[Brain] Loaded cached model ({MODEL_PATH.name})")
@@ -75,16 +75,19 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
             mb.TensorSpec(shape=(max_pop, n_inputs)),            # x
             mb.TensorSpec(shape=(max_pop, n_inputs,  n_hidden)), # W1
             mb.TensorSpec(shape=(max_pop, n_hidden,  n_outputs)),# W2
+            mb.TensorSpec(shape=(max_pop, n_hidden,  n_hidden)), # Wh
             mb.TensorSpec(shape=(max_pop, n_hidden)),            # h_prev
         ])
-        def brain_prog(x, W1, W2, h_prev):
+        def brain_prog(x, W1, W2, Wh, h_prev):
             # x: (B, I) → (B, 1, I) for batched matmul
-            x_e   = mb.expand_dims(x=x, axes=[-2])                        # (B, 1, I)
-            h_raw = mb.squeeze(x=mb.matmul(x=x_e, y=W1), axes=[-2])      # (B, H)
-            h_new = mb.tanh(x=mb.add(x=h_raw, y=h_prev), name='h_new')   # (B, H) recurrent
-            h_e   = mb.expand_dims(x=h_new, axes=[-2])                    # (B, 1, H)
-            out   = mb.squeeze(x=mb.matmul(x=h_e, y=W2), axes=[-2])      # (B, O)
-            out   = mb.tanh(x=out, name='out')
+            x_e    = mb.expand_dims(x=x, axes=[-2])                         # (B, 1, I)
+            h_raw  = mb.squeeze(x=mb.matmul(x=x_e, y=W1), axes=[-2])       # (B, H)
+            hp_e   = mb.expand_dims(x=h_prev, axes=[-2])                    # (B, 1, H)
+            wh_raw = mb.squeeze(x=mb.matmul(x=hp_e, y=Wh), axes=[-2])      # (B, H)
+            h_new  = mb.tanh(x=mb.add(x=h_raw, y=wh_raw), name='h_new')    # (B, H) recurrent
+            h_e    = mb.expand_dims(x=h_new, axes=[-2])                     # (B, 1, H)
+            out    = mb.squeeze(x=mb.matmul(x=h_e, y=W2), axes=[-2])       # (B, O)
+            out    = mb.tanh(x=out, name='out')
             return h_new, out
 
         model = ct.convert(brain_prog,
@@ -94,7 +97,7 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
         model.save(str(MODEL_PATH))
         META_PATH.write_text(json.dumps(
             {"max_pop": max_pop, "n_in": n_inputs, "n_hid": n_hidden,
-             "n_out": n_outputs, "recurrent": True}))
+             "n_out": n_outputs, "recurrent": True, "has_wh": True}))
         _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
         _use_coreml = True
         print(f" done ({time.time()-t0:.1f}s)")
@@ -104,7 +107,7 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
         return False
 
 
-def run_brain(x: np.ndarray, W1: np.ndarray, W2: np.ndarray,
+def run_brain(x: np.ndarray, W1: np.ndarray, W2: np.ndarray, Wh: np.ndarray,
               h_prev: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Recurrent forward pass for all organisms.
@@ -126,19 +129,21 @@ def run_brain(x: np.ndarray, W1: np.ndarray, W2: np.ndarray,
             xi      = x[s:e].astype(np.float32)
             W1i     = W1[s:e].astype(np.float32)
             W2i     = W2[s:e].astype(np.float32)
+            Whi     = Wh[s:e].astype(np.float32)
             hi      = h_prev[s:e].astype(np.float32)
             if chunk < _max_pop:
                 pad    = _max_pop - chunk
-                xi     = np.vstack([xi,  np.zeros((pad, _n_in),           dtype=np.float32)])
-                W1i    = np.concatenate([W1i, np.zeros((pad, _n_in, _n_hid),  dtype=np.float32)])
-                W2i    = np.concatenate([W2i, np.zeros((pad, _n_hid, _n_out), dtype=np.float32)])
-                hi     = np.vstack([hi,  np.zeros((pad, _n_hid),           dtype=np.float32)])
-            r = _model.predict({"x": xi, "W1": W1i, "W2": W2i, "h_prev": hi})
+                xi     = np.vstack([xi,  np.zeros((pad, _n_in),            dtype=np.float32)])
+                W1i    = np.concatenate([W1i, np.zeros((pad, _n_in, _n_hid),   dtype=np.float32)])
+                W2i    = np.concatenate([W2i, np.zeros((pad, _n_hid, _n_out),  dtype=np.float32)])
+                Whi    = np.concatenate([Whi, np.zeros((pad, _n_hid, _n_hid),  dtype=np.float32)])
+                hi     = np.vstack([hi,  np.zeros((pad, _n_hid),            dtype=np.float32)])
+            r = _model.predict({"x": xi, "W1": W1i, "W2": W2i, "Wh": Whi, "h_prev": hi})
             h_chunks.append(r['h_new'][:chunk])
             o_chunks.append(r['out'][:chunk])
         return np.vstack(h_chunks), np.vstack(o_chunks)
 
     # numpy fallback
-    h_new = np.tanh(np.einsum('bi,bih->bh', x, W1) + h_prev)
+    h_new = np.tanh(np.einsum('bi,bih->bh', x, W1) + np.einsum('bh,bhk->bk', h_prev, Wh))
     out   = np.tanh(np.einsum('bh,bho->bo', h_new, W2))
     return h_new, out
