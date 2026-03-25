@@ -21,8 +21,8 @@ TICKS   = 3000
 OUT     = "screenshot.png"
 
 init_ane()
+world = new_world(42)
 rng   = np.random.default_rng(42)
-world = new_world(rng)
 tick  = 0
 history          = []
 lineage_history  = []
@@ -79,7 +79,8 @@ for t in range(0, tick, 30):
                     float(pop['size'].mean()), float(pop['mutation_rate'].mean())))
 
 draw_panel(surf, font, font_sm, font_lg, tick, pop, None,
-           history, lineage_history, [], 1, vents=vents, phylo_state=world['phylo'])
+           history, lineage_history, [], 1, vents=vents, phylo_state=world['phylo'],
+           seed=world.get('seed'))
 
 pygame.image.save(surf, OUT)
 print(f"saved → {OUT}")
