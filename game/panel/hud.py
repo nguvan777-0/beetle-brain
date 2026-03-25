@@ -67,6 +67,12 @@ def _draw_vent_map(surf, pop, vents, rect):
         surf.set_at((wx, wy), color)
 
 
+from functools import lru_cache
+
+@lru_cache(maxsize=1024)
+def _render_text(text: str, font, color: tuple):
+    return font.render(str(text), True, color)
+
 def _lerp_color(t, lo=(60, 100, 200), mid=(60, 200, 120), hi=(220, 80, 60)):
     """Blue→green→red gradient for 0→1."""
     if t < 0.5:
@@ -123,9 +129,8 @@ def _draw_trait_heatmap(surf, pop, rect, font_sm):
         ty   = i * row_h
         span = hi - lo if hi != lo else 1.0
 
-        p10    = float(np.percentile(vals, 10))
-        median = float(np.percentile(vals, 50))
-        p90    = float(np.percentile(vals, 90))
+        p10, median, p90 = np.percentile(vals, [10, 50, 90])
+        p10, median, p90 = float(p10), float(median), float(p90)
 
         n_p10    = (p10    - lo) / span
         n_med    = (median - lo) / span
@@ -144,7 +149,7 @@ def _draw_trait_heatmap(surf, pop, rect, font_sm):
         mx = bar_x + int(np.clip(n_med, 0, 1) * bar_w)
         pygame.draw.rect(tsurf, color, (mx - 1, ty, 3, row_h))
         # label
-        tsurf.blit(font_sm.render(name, True, (120, 130, 150)), (0, ty))
+        tsurf.blit(_render_text(name, font_sm, (120, 130, 150)), (0, ty))
 
     surf.blit(tsurf, (rx, ry))
 
@@ -155,15 +160,24 @@ def _hue_to_rgb(hue: float) -> tuple:
     return (int(r * 255), int(g * 255), int(b * 255))
 
 
+_anc_color_cache = {}
+
 def _anc_color(ancestor_id: int, phylo_state) -> tuple:
     """Look up lineage color from phylo hue array."""
     from sim.phylo import M
-    return _hue_to_rgb(phylo_state['hue'][int(ancestor_id) % M])
+    aid = int(ancestor_id) % M
+    hue = phylo_state['hue'][aid]
+    
+    # Use a cache key based on the actual hue value
+    cache_key = float(hue)
+    if cache_key not in _anc_color_cache:
+        _anc_color_cache[cache_key] = _hue_to_rgb(hue)
+    return _anc_color_cache[cache_key]
 
 
 _pca_surf_cache = None
 
-def _draw_pca_scatter(surf, pop, rect, phylo_state, pca_proj):
+def _draw_pca_scatter(surf, pop, rect, phylo_state, pca_proj, anc_ids=None):
     """Draw pre-computed PCA projection; colour by phylogenetic sub-lineage."""
     global _pca_surf_cache
     rx, ry, rw, rh = rect
@@ -201,8 +215,12 @@ def _draw_pca_scatter(surf, pop, rect, phylo_state, pca_proj):
     else:
         ys[:] = 4 + ((proj[:, 1] - lo[1]) / span[1] * (rh - 8)).astype(int)
 
-    depth                  = max(4, int(pop['generation'].max()) // 3)
-    ancestors              = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
+    if anc_ids is None:
+        depth                  = max(4, int(pop['generation'].max()) // 3)
+        ancestors              = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
+    else:
+        ancestors = anc_ids
+        
     unique_anc, inv        = np.unique(ancestors, return_inverse=True)
     color_map              = [_anc_color(int(a), phylo_state) for a in unique_anc]
 
@@ -222,6 +240,8 @@ def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
     all_ids = sorted({aid for frame in lineage_history for aid in frame})
     if not all_ids:
         return
+        
+    color_map = {aid: _anc_color(aid, phylo_state) for aid in all_ids}
 
     T = len(lineage_history)
     for t in range(T):
@@ -235,10 +255,10 @@ def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
             if count == 0:
                 continue
             h   = int(count / total * rh)
-            if h == 0:
+            if h <= 0:
                 continue
             top = bot - h
-            pygame.draw.rect(surf, _anc_color(aid, phylo_state), (x, top, max(1, x1 - x), h))
+            pygame.draw.rect(surf, color_map[aid], (x, top, max(1, x1 - x), h))
             bot = top
 
     pygame.draw.rect(surf, (50, 50, 80), rect, 1)
@@ -246,7 +266,7 @@ def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
 
 def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                history, lineage_history, hall_fame, sim_speed=1, vents=None, phylo_state=None,
-               seed=None, pca_proj=None, sel_W_body=None):
+               seed=None, pca_proj=None, sel_W_body=None, anc_ids=None):
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
@@ -255,7 +275,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
     def txt(s, f=None, color=(180, 180, 200)):
         nonlocal y
-        surf.blit((f or font).render(s, True, color), (px + 10, y))
+        surf.blit(_render_text(s, f or font, color), (px + 10, y))
         y += (f or font).get_height() + 2
 
     def sep():
@@ -265,9 +285,9 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
     speed_label = "HEADLESS" if sim_speed == 0 else f"{sim_speed}x"
     speed_color = (255, 180, 50) if sim_speed != 1 else (120, 120, 150)
-    surf.blit(font_lg.render("BEETLE-BRAIN", True, (220, 220, 255)), (px + 10, y))
+    surf.blit(_render_text("BEETLE-BRAIN", font_lg, (220, 220, 255)), (px + 10, y))
     if seed is not None:
-        seed_surf = font_sm.render(f"seed {seed}", True, (100, 110, 140))
+        seed_surf = _render_text(f"seed {seed}", font_sm, (100, 110, 140))
         surf.blit(seed_surf, (px + PANEL_W - seed_surf.get_width() - 8, y + 3))
     y += font_lg.get_height() + 2
     txt(f"tick {tick:,}   [{speed_label}]  SPACE=cycle", font_sm, speed_color)
@@ -288,7 +308,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         for aid, cnt in sorted(lineage_history[-1].items(), key=lambda kv: -kv[1]):
             color = _anc_color(aid, phylo_state)
             pygame.draw.circle(surf, color, (lx + 4, y + 5), 4)
-            surf.blit(font_sm.render(f"{cnt}", True, color), (lx + 11, y))
+            surf.blit(_render_text(f"{cnt}", font_sm, color), (lx + 11, y))
             lx += 38
             if lx > px + PANEL_W - 38:
                 lx = px + 10
@@ -308,14 +328,14 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     # ── PCA scatter ──────────────────────────────────────────────────────
     if pca_proj is not None or _pca_surf_cache is not None:
         txt("STRATEGY SPACE  (W_body PCA)", font, (160, 180, 220))
-        _draw_pca_scatter(surf, pop, (px + 8, y, PANEL_W - 16, 130), phylo_state, pca_proj)
+        _draw_pca_scatter(surf, pop, (px + 8, y, PANEL_W - 16, 130), phylo_state, pca_proj, anc_ids=anc_ids)
         y += 134
         sep()
 
     if hall_fame:
         txt("HALL OF FAME", font, (255, 210, 80))
         for i, (eaten, gen, age, spd, fov, sz, drn, r, g, b) in enumerate(hall_fame):
-            pygame.draw.circle(surf, (r, g, b), (px + 18, y + 6), 5)
+            pygame.draw.circle(surf, (int(r), int(g), int(b)), (px + 18, y + 6), 5)
             txt(f"  #{i+1} ate:{eaten:3d} g{gen} spd{spd:.1f} sz{sz:.1f}", font_sm, (220, 200, 140))
         sep()
 
@@ -355,7 +375,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
             color_bar = (100, 200, 100) if w_val > 0 else (200, 80, 80)
             pygame.draw.rect(surf, color_bar,
                              (bar_x + j * bw + 1, bar_y + 20 - h_bar, bw - 2, h_bar))
-            surf.blit(font_sm.render(lbl, True, (120, 120, 140)),
+            surf.blit(_render_text(lbl, font_sm, (120, 120, 140)),
                       (bar_x + j * bw, bar_y + 22))
         y = bar_y + 38
 
