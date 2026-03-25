@@ -48,7 +48,8 @@ class StatsCollector:
             'killer':  None,   # max eaten
             'eldest':  None,   # max generation
         }
-        self.run_meta   = {}
+        self.run_meta    = {}
+        self._tick_start = None   # set on first record; all ticks stored relative to this
         # lineage river: {ancestor_id: [(tick, count), ...]}
         self._lineage_series     = {}
         self._lineage_hues       = {}
@@ -61,6 +62,9 @@ class StatsCollector:
         N = len(pop['x'])
         if N == 0:
             return
+        if self._tick_start is None:
+            self._tick_start = tick
+        tick = tick - self._tick_start
 
         # ── drain components ──────────────────────────────────────────────────
         speeds    = pop.get('speed', np.zeros(N))
@@ -176,13 +180,14 @@ class StatsCollector:
     # ── finalize ─────────────────────────────────────────────────────────────
 
     def finalize(self, tick, elapsed, pop=None, phylo_state=None, extinct=False):
+        if pop is not None and not extinct:
+            self.record(tick, pop, phylo_state)
+        session_ticks = tick - (self._tick_start or tick)
         self.run_meta = {
-            'ticks':         tick,
+            'ticks':         session_ticks,
             'elapsed':       elapsed,
-            'tps':           tick / elapsed if elapsed > 0 else 0,
+            'tps':           session_ticks / elapsed if elapsed > 0 else 0,
             'extinct':       extinct,
             'final_pop':     len(pop['x']) if pop is not None and not extinct else 0,
             'final_max_gen': int(pop['generation'].max()) if pop is not None and not extinct else 0,
         }
-        if pop is not None and not extinct:
-            self.record(tick, pop, phylo_state)

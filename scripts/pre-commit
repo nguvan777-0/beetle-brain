@@ -15,8 +15,8 @@ import pygame
 pygame.init()
 import os
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+world = new_world(42)
 rng = np.random.default_rng(42)
-world = new_world(rng)
 for _ in range(10):
     world = sim_tick(world, rng)
 print('[ok] pygame smoke: 10 ticks')

@@ -25,13 +25,13 @@ else:
 
     init_ane()
 
-    rng     = np.random.default_rng()
-    world   = new_world(rng)
+    world   = new_world()
+    rng     = np.random.default_rng(world['seed'])
     tick    = 0
     stats   = StatsCollector()
     extinct = False
 
-    print(f"{'tick':>8} {'pop':>5} {'gen':>5} {'age':>7} {'ate':>5} {'spd':>5} {'sz':>4}  elapsed")
+    print(f"seed {world['seed']}  —  {'tick':>8} {'pop':>5} {'gen':>5} {'age':>7} {'ate':>5} {'spd':>5} {'sz':>4}  elapsed")
     print("─" * 60)
 
     t0          = time.time()
