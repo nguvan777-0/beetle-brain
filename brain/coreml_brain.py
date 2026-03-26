@@ -19,7 +19,7 @@ Hunger, spatial memory, fear, anticipation — whatever helps survival emerges.
 Falls back to numpy einsum if CoreML unavailable.
 """
 from __future__ import annotations
-import json, time
+import json, threading, time
 from pathlib import Path
 import numpy as np
 
@@ -43,7 +43,7 @@ _use_coreml = False
 
 
 def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bool:
-    global _model, _max_pop, _n_in, _n_hid, _n_out, _use_coreml
+    global _max_pop, _n_in, _n_hid, _n_out
 
     _max_pop = max_pop
     _n_in    = n_inputs
@@ -54,6 +54,15 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
         print("[Brain] coremltools not available — numpy fallback")
         return False
 
+    threading.Thread(target=_load_or_compile,
+                     args=(max_pop, n_inputs, n_hidden, n_outputs),
+                     daemon=True).start()
+    return False  # numpy fallback until thread finishes
+
+
+def _load_or_compile(max_pop, n_inputs, n_hidden, n_outputs):
+    global _model, _use_coreml
+
     if MODEL_PATH.exists() and META_PATH.exists():
         try:
             meta = json.loads(META_PATH.read_text())
@@ -61,12 +70,14 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
                     and meta.get("n_hid") == n_hidden and meta.get("n_out") == n_outputs
                     and meta.get("recurrent") == True and meta.get("has_wh") == True
                     and meta.get("has_bias") == True):
-                _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
+                t0 = time.time()
+                model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
+                _model = model
                 _use_coreml = True
-                print(f"[Brain] Loaded cached model ({MODEL_PATH.name})")
-                return True
+                print(f"[Brain] ready ({time.time()-t0:.1f}s)")
+                return
         except Exception as e:
-            print(f"[Brain] Cache load failed ({e}), rebuilding...")
+            print(f"[Brain] cache load failed ({e}), rebuilding...")
 
     print(f"[Brain] Compiling recurrent brain model "
           f"(pop={max_pop}, {n_inputs}→{n_hidden}→{n_outputs})...", end="", flush=True)
@@ -101,13 +112,12 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
         META_PATH.write_text(json.dumps(
             {"max_pop": max_pop, "n_in": n_inputs, "n_hid": n_hidden,
              "n_out": n_outputs, "recurrent": True, "has_wh": True, "has_bias": True}))
-        _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
+        model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
+        _model = model
         _use_coreml = True
         print(f" done ({time.time()-t0:.1f}s)")
-        return True
     except Exception as e:
         print(f" FAILED: {e} — numpy fallback")
-        return False
 
 
 def run_brain(x: np.ndarray, W1: np.ndarray, W2: np.ndarray, Wh: np.ndarray,
