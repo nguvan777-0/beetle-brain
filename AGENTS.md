@@ -26,7 +26,7 @@ Run headless for N seconds:
 uv run --with numpy --with coremltools --with plotly python world.py 60
 ```
 
-`plotly` is optional for report generation. `coremltools` is optional and the sim falls back to numpy.
+`plotly` is optional for HTML report generation. `coremltools` is optional and the sim falls back to numpy.
 
 ## After cloning
 Run once to install the pre-commit smoke tests (headless + pygame):

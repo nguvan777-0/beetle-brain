@@ -24,13 +24,13 @@ uv run --with numpy --with coremltools --with plotly python world.py 0
 
 Pass a duration in seconds for a timed run, or omit for the default 30s. `python world.py --help` lists all flags.
 
-Without `plotly` the exit report is skipped. Without `coremltools` the brain runs on numpy. The first run compiles two CoreML models and caches them to `build/`.
+Without `coremltools` the brain runs on numpy. Without `plotly` the HTML report is skipped. The first run compiles two CoreML models and caches them to `build/`.
 
 **Keys:** `SPACE` cycle speed (1×/5×/20×/100×) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
 ## the wight
 
-Each wight is ~2,294 floats: 20 body weights (W_body), 1,152 for the first brain layer (36 inputs × 32 max hidden), 64 for the second (32 hidden × 2 outputs), 1,024 for the hidden-to-hidden recurrent layer (32 × 32), and 34 bias weights (b1: 32, b2: 2). All decoded from the same array via sigmoid. Starts with 12 wights (a primordial soup). Everything else emerges.
+Each wight is ~2,294 floats: 20 body weights (W_body), 1,152 for the first brain layer (36 inputs × 32 max hidden), 64 for the second (32 hidden × 2 outputs), 1,024 for the hidden-to-hidden recurrent layer (32 × 32), and 34 bias weights (b1: 32, b2: 2). W_body is decoded via sigmoid into bounded physical traits; the brain weights are unconstrained floats evolved in weight space. Starts with 12 wights (a primordial soup). Everything else emerges.
 
 Each ray returns 5 channels: food distance, organism distance, and the organism's r/g/b color. Up to 7 rays per wight, giving 35 ray inputs + 1 energy = 36 total inputs. The number of active rays (0–7) is an evolvable gene — a wight with no vision costs nothing on sensing.
 
@@ -73,7 +73,7 @@ Life thrives at the boundary between states—rivers, coastlines, and thermal ve
 `sim/` — pure simulation logic: tick, sensing, predation, HGT, evolution, vents  
 `game/` — pygame loop, renderer, HUD — no sim logic crosses in  
 `brain/` — CoreML Elman RNN and fused sensing+brain kernel  
-`report.py` — offline HTML report
+`report.py` — plain-text and HTML report
 
 ## Tuning the world
 
