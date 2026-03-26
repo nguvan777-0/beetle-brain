@@ -51,14 +51,14 @@ def main():
 
     rng = np.random.default_rng()
 
-    world, tick, history, hall_fame = load_snapshot(rng)
+    world, tick, history, hall_fame, _saved_stats = load_snapshot(rng)
     if world is None:
         world     = new_world()
         tick      = 0
         history   = []
         hall_fame = []
 
-    stats         = StatsCollector()
+    stats         = _saved_stats if _saved_stats is not None else StatsCollector()
     next_sample   = SAMPLE_EVERY
     lineage_hist  = []
     t_start       = time.time()
@@ -76,18 +76,19 @@ def main():
         # ── events ────────────────────────────────────────────────────────────
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                save_snapshot(world, tick, history, hall_fame)
+                save_snapshot(world, tick, history, hall_fame, stats)
                 _exit_with_report(stats, tick, world, t_start, extinct=False)
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                save_snapshot(world, tick, history, hall_fame)
+                save_snapshot(world, tick, history, hall_fame, stats)
                 _exit_with_report(stats, tick, world, t_start, extinct=False)
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_l:
                 result = load_snapshot(rng)
                 if result[0] is not None:
-                    world, tick, history, hall_fame = result
-                    stats = StatsCollector(); next_sample = SAMPLE_EVERY
+                    world, tick, history, hall_fame, _sv = result
+                    stats = _sv if _sv is not None else StatsCollector()
+                    next_sample = SAMPLE_EVERY
                     lineage_hist = []; t_start = time.time(); sel_idx = None
                     
             if event.type == pygame.MOUSEBUTTONDOWN:

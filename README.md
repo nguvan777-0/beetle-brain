@@ -79,13 +79,70 @@ Everything is in `config.toml`. Edit it, restart the sim. Sections: `[world]`, `
 
 ## run report
 
-Generates `report.html` on exit (ESC, quit, or extinction). Open in any browser — fully offline.
+On exit (ESC, quit, or end of headless run) two files are written: `report_{commit}_{seed}_{tick}.html` and `report_{commit}_{seed}_{tick}.txt`.
 
-- **lineage tree** — forks over time, node size = dominance, color = phylo hue
-- **genome heatmap** — all 20 genes × time, normalized within each gene's range
-- **phase scatter** — size vs pred_ratio at final snapshot, colored by lineage
-- **drain breakdown** — Kleiber + speed² + size² + sensing cost, stacked
-- **hall of fame** — longest-lived, most ate, highest generation
+The HTML opens in any browser — fully offline. Charts: lineage tree, genome heatmap (20 genes × time), phase scatter, drain breakdown, hall of fame.
+
+The `.txt` covers the same run — trait means at exit, sparkline trajectories, drain by component, lineage dominance, strategy spread, key moments:
+
+```
+============================================================
+  beetle-brain · run report
+  9,822 ticks  ·  seed 869659  ·  pop 4096
+============================================================
+
+  max gen        44
+  max age     3,141
+  max eaten     969
+
+────────────────────────────────────────────────────────────
+  hall of fame
+────────────────────────────────────────────────────────────
+  longest survivor
+    age 3,141  ·  ate 151  ·  gen 26
+    size 8.74  speed 0.87  fov 72.7°  pred 1.23
+
+────────────────────────────────────────────────────────────
+  trajectory  (tick 0 → 3,905 → 8,405)
+────────────────────────────────────────────────────────────
+  pop             12.0 →  224.0 → 4096.0            ▁▁▁▁▁▂▄▇█
+  max_gen          2.0 →    8.0 →   44.0       ▁▁▁▁▁▁▂▃▄▄▅▅▆█
+  size             6.5 →    6.9 →    8.6    ▁▁▁▁▁▁▁▁▁▁▃▅▅▆▇▇█
+  speed            2.1 →    1.9 →    1.1  ▇▇██▇▇▇▆▆▆▅▅▅▆▅▅▄▁
+  fov°            66.3 →   59.4 →   68.5  ▇▇▄▁▂▁▂▂▂▃▃▄▁ ▂▁▃▆█
+  pred_ratio       1.3 →    1.3 →    1.3  ██▄▂▃▂▂▃▃▄▄▅▂ ▂▁▁▂
+  mut_rate         0.2 →    0.2 →    0.3  ▂▂▂ ▁ ▁▂▂▃▄▅▃▂▄▄▅█▇
+  n_rays           4.8 →    5.4 →    4.9    ▁▄▅▅▆▇████▇▅▄▄▅▅▁
+  active_neur     12.8 →   13.2 →   12.6  ▂▂▄ ▂ ▁▄▅▄▆█▄▂▃▃▆▅▁
+
+  drain / tick (mean at end)
+    kleiber      0.0504    ▁▁▁▁▁▁▁▁▁▁▃▅▅▆▇▇█
+    speed        0.0072  ▇▇█▇▆▆▆▆▅▅▄▄▅▅▄▄▃▁
+    size         0.0225    ▁▁▁▁▁▁▁▁▁▁▃▄▅▆▇▇█
+    sensing      0.0021  ██▇▂▂▁▂▂▃▄▄▄▃▁▂  ▁▂
+    brain        0.0093  ▂▂▄▁▂ ▁▄▅▄▆█▄▂▃▃▆▅▂
+
+────────────────────────────────────────────────────────────
+  lineage dominance  (147 total)
+────────────────────────────────────────────────────────────
+  6           born tick      0  share    7%  final    91  ▁▁▂▃▄▆▇█▅▄█▅▅
+  393         born tick  5,905  share    5%  final   274  ▁▃▇█
+  299         born tick  5,905  share    5%  final   268  ▁▁▃▇█
+  161         born tick  4,905  share    4%  final   247  ▁▂▃▅█
+  1408        born tick  6,905  share    4%  final   247  ▂▇█
+
+────────────────────────────────────────────────────────────
+  strategy spread at final snapshot  — spread suggests multiple strategies
+────────────────────────────────────────────────────────────
+  size        mean  8.65  std 0.19  range 8.07–8.98
+  pred_ratio  mean  1.26  std 0.13  range 1.06–1.77
+  speed       mean  1.09
+
+  key moments
+    tick  6,405  size crossed 80% of range
+    tick  8,405  size crossed 90% — ceiling locked
+    tick  4,905  fastest size change (6.85→7.35)
+```
 
 ## License
 
