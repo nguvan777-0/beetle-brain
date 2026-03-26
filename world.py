@@ -15,10 +15,13 @@ if _has_pygame:
     from game.main import main
     main()
 else:
+    import atexit
+    import signal
     import time
     import numpy as np
     from sim import new_world, tick as sim_tick, init_ane
     from sim.stats import StatsCollector, SAMPLE_EVERY
+    from game.snapshot import save_snapshot
 
     DURATION     = float(sys.argv[1]) if len(sys.argv) > 1 else 30.0
     REPORT_EVERY = 500
@@ -30,6 +33,20 @@ else:
     tick    = 0
     stats   = StatsCollector()
     extinct = False
+    history = []
+
+    def _on_exit():
+        save_snapshot(world, tick, history, [])
+        print("\n" + "─" * 60)
+        import runpy
+        _argv, sys.argv = sys.argv, ["parse_snapshot.py"]
+        try:
+            runpy.run_path("parse_snapshot.py")
+        finally:
+            sys.argv = _argv
+
+    atexit.register(_on_exit)
+    signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 
     print(f"seed {world['seed']}  —  {'tick':>8} {'pop':>5} {'gen':>5} {'age':>7} {'ate':>5} {'spd':>5} {'sz':>4}  elapsed")
     print("─" * 60)
@@ -55,6 +72,14 @@ else:
         if tick >= next_sample:
             stats.record(tick, pop, world['phylo'])
             next_sample += SAMPLE_EVERY
+
+        if tick % 30 == 0 and len(pop['x']) > 0:
+            history.append((
+                float(tick), float(len(pop['x'])),
+                float(pop['generation'].max()),
+                float(pop['speed'].mean()), float(pop['fov'].mean()),
+                float(pop['size'].mean()), float(pop['mutation_rate'].mean()),
+            ))
 
         if tick >= next_report:
             N = len(pop['x'])
