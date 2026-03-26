@@ -437,6 +437,40 @@ def main():
                 if lx_iter > hud_x + rw - 35:
                     lx_iter = hud_x
                     stats_y += 20
+                    
+        stats_y += 20
+        
+        # Strategy Space (Live PCA over Neural Weights!)
+        if pop > 3:
+            # Flatten population weights to (pop, 15)
+            W_pop = weights[:, y_idx, x_idx].T
+            W_cen = W_pop - W_pop.mean(axis=0)
+            try:
+                # Fast compute top 2 dimensions via SVD (Pure Math PCA!)
+                u, s, vh = np.linalg.svd(W_cen, full_matrices=False)
+                proj = np.dot(W_cen, vh[:2].T)
+                
+                screen.blit(font.render("STRATEGY SPACE  (W_brain PCA)", True, (160, 180, 220)), (hud_x, stats_y)); stats_y += 15
+                pca_h = 130
+                pygame.draw.rect(screen, (20, 20, 25), (hud_x, stats_y, rw, pca_h))
+                pygame.draw.rect(screen, (40, 40, 50), (hud_x, stats_y, rw, pca_h), 1)
+                
+                p_min = proj.min(axis=0)
+                p_max = proj.max(axis=0)
+                span = p_max - p_min
+                span[span < 1e-6] = 1.0 # prevent div zero
+                
+                for i in range(pop):
+                    lid = int(np.argmax(W_pop[i, :12]))
+                    x_c = int(hud_x + 5 + (proj[i, 0] - p_min[0]) / span[0] * (rw - 10))
+                    y_c = int(stats_y + 5 + (proj[i, 1] - p_min[1]) / span[1] * (pca_h - 10))
+                    # Draw lineage color dots into the strategy space
+                    screen.set_at((x_c, y_c), _LINEAGE_COLORS[lid])
+                    screen.set_at((x_c+1, y_c), _LINEAGE_COLORS[lid])
+                    screen.set_at((x_c, y_c+1), _LINEAGE_COLORS[lid])
+                    screen.set_at((x_c+1, y_c+1), _LINEAGE_COLORS[lid])
+            except:
+                pass
         
         pygame.display.flip()
         
