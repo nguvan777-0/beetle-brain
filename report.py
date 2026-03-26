@@ -34,6 +34,38 @@ def _hue_to_rgba_css(hue, alpha, s=0.85, v=0.9):
     return f"rgba({int(r*255)},{int(g*255)},{int(b*255)},{alpha})"
 
 
+def _lineage_trait_means(stats, samples):
+    """Return {uid: {size, speed, pred, n_rays, neurons}} for all lineages with wights at final sample."""
+    if not samples:
+        return {}
+    last       = samples[-1]
+    hues_all   = last.get('lineage_hues_all', [])
+    sz_all     = last.get('size_all', [])
+    sp_all     = last.get('speed_all', [])
+    pr_all     = last.get('pred_ratio_all', [])
+    nr_all     = last.get('n_rays_all', [])
+    an_all     = last.get('active_neurons_all', [])
+    hue_to_uid = {v: k for k, v in stats._lineage_hues.items()}
+    buckets    = {}
+    for i, h in enumerate(hues_all):
+        uid = hue_to_uid.get(h)
+        if uid is None:
+            continue
+        buckets.setdefault(uid, []).append(i)
+    result = {}
+    for uid, idxs in buckets.items():
+        n = len(idxs)
+        result[uid] = {
+            'size':    sum(sz_all[i] for i in idxs) / n,
+            'speed':   sum(sp_all[i] for i in idxs) / n,
+            'pred':    sum(pr_all[i] for i in idxs) / n,
+            'n_rays':  sum(nr_all[i] for i in idxs) / n if nr_all else 0,
+            'neurons': sum(an_all[i] for i in idxs) / n if an_all else 0,
+            'count':   n,
+        }
+    return result
+
+
 def _sparkline(series, width=28):
     import math
     BLOCKS = " ▁▂▃▄▅▆▇█"
@@ -47,7 +79,8 @@ def _sparkline(series, width=28):
     return "".join(BLOCKS[i] for i in sampled)
 
 
-def generate_text(stats, path=None):
+def generate_text(stats, path=None, world=None, tick=None):
+    import numpy as np
     samples = stats.samples
     meta    = stats.run_meta
     hof     = stats.hall_fame
@@ -72,6 +105,74 @@ def generate_text(stats, path=None):
         w(f"\n  max gen    {max_gen:>6}")
         w(f"  max age    {max_age:>6,}")
         w(f"  max eaten  {max_eaten:>6}")
+
+    # snapshot traits, vents, oldest wight — only when pop is available
+    if world is not None and tick is not None:
+        from sim.config import (
+            SPEED_MIN, SPEED_MAX, FOV_MIN, FOV_MAX, RAY_MIN, RAY_MAX,
+            SIZE_MIN, SIZE_MAX, MOUTH_MIN, MOUTH_MAX,
+            BREED_AT_MIN, BREED_AT_MAX, CLONE_WITH_MIN, CLONE_WITH_MAX,
+            MUTATION_RATE_MIN, MUTATION_RATE_MAX,
+            MUTATION_SCALE_MIN, MUTATION_SCALE_MAX,
+            EPIGENETIC_MIN, EPIGENETIC_MAX,
+            WEIGHT_DECAY_MIN, WEIGHT_DECAY_MAX,
+            HGT_EAT_MIN, HGT_EAT_MAX, HGT_CONTACT_MIN, HGT_CONTACT_MAX,
+            PRED_RATIO_MIN, PRED_RATIO_MAX, N_RAYS, N_HIDDEN,
+            COASTLINE_X,
+        )
+        pop   = world['pop']
+        food  = world.get('food', [])
+        vents = world.get('vents', [])
+        N     = len(pop['x'])
+
+        def _pct(val, lo, hi):
+            return 100 * (val - lo) / (hi - lo) if hi > lo else 0.0
+
+        born_at = tick - int(pop['age'].max()) if N > 0 else 0
+        w(f"\n  oldest wight born ~tick {born_at:,}  (survived {int(pop['age'].max()):,} ticks)")
+        w(f"\n  food on map : {len(food)}")
+        w(f"  vents       : {len(vents)}")
+        for i, v in enumerate(vents):
+            side = "sea" if v[0] < COASTLINE_X else "land"
+            w(f"    vent {i+1}  x={v[0]:.0f}  y={v[1]:.0f}  ({side})")
+
+        TRAITS = [
+            ('speed',          pop['speed'],             SPEED_MIN,         SPEED_MAX,   ''),
+            ('fov°',           np.degrees(pop['fov']),   np.degrees(FOV_MIN), np.degrees(FOV_MAX), ''),
+            ('ray_len',        pop['ray_len'],            RAY_MIN,           RAY_MAX,    ''),
+            ('size',           pop['size'],               SIZE_MIN,          SIZE_MAX,   ''),
+            ('breed_at',       pop['breed_at'],           BREED_AT_MIN,      BREED_AT_MAX, ''),
+            ('clone_with',     pop['clone_with'],         CLONE_WITH_MIN,    CLONE_WITH_MAX, ''),
+            ('mutation_rate',  pop['mutation_rate'],      MUTATION_RATE_MIN, MUTATION_RATE_MAX, ''),
+            ('mutation_scale', pop['mutation_scale'],     MUTATION_SCALE_MIN,MUTATION_SCALE_MAX, ''),
+            ('epigenetic',     pop['epigenetic'],         EPIGENETIC_MIN,    EPIGENETIC_MAX, ''),
+            ('weight_decay',   pop['weight_decay'],       WEIGHT_DECAY_MIN,  WEIGHT_DECAY_MAX, ''),
+            ('mouth',          pop['mouth'],              MOUTH_MIN,         MOUTH_MAX,  ''),
+            ('pred_ratio',     pop['pred_ratio'],         PRED_RATIO_MIN,    PRED_RATIO_MAX, ''),
+            ('hgt_eat_rate',   pop['hgt_eat_rate'],       HGT_EAT_MIN,       HGT_EAT_MAX, ''),
+            ('hgt_contact',    pop['hgt_contact_rate'],   HGT_CONTACT_MIN,   HGT_CONTACT_MAX, ''),
+        ]
+
+        w(f"\n{'─'*60}")
+        w(f"  {'trait':<18}  {'mean':>7}  {'min':>7}  {'max':>7}  {'range%':>7}")
+        w(f"{'─'*60}")
+        for label, vals, lo, hi, _ in TRAITS:
+            m = float(vals.mean())
+            w(f"  {label:<18}  {m:>7.2f}  {float(vals.min()):>7.2f}  {float(vals.max()):>7.2f}"
+              f"  {_pct(m, lo, hi):>6.0f}%")
+        an = pop.get('active_neurons', np.zeros(N))
+        nr = pop.get('n_rays',         np.zeros(N))
+        an_m = float(an.mean())
+        nr_m = float(nr.mean())
+        w(f"  {'active_neurons':<18}  {an_m:>7.1f}  {int(an.min()):>7}  {int(an.max()):>7}"
+          f"  {_pct(an_m, 0, N_HIDDEN):>6.0f}%")
+        w(f"  {'n_rays':<18}  {nr_m:>7.2f}  {int(nr.min()):>7}  {int(nr.max()):>7}"
+          f"  {_pct(nr_m, 0, N_RAYS):>6.0f}%")
+        w(f"{'─'*60}")
+        r_m = float(pop['r'].mean()) if 'r' in pop else 0
+        g_m = float(pop['g'].mean()) if 'g' in pop else 0
+        b_m = float(pop['b'].mean()) if 'b' in pop else 0
+        w(f"\n  mean color  r={r_m:.0f}  g={g_m:.0f}  b={b_m:.0f}")
 
     # hall of fame
     hof_entries = [
@@ -149,15 +250,19 @@ def generate_text(stats, path=None):
             bar    = "█" * filled + BAR[round(frac * 8)] + "░" * (9 - filled)
             w(f"  {name:<16}  {bar}  {val*100:>3.0f}%")
 
-    # lineage dominance
+    # lineage river
     lineage_series = stats._lineage_series
     lineage_first  = stats._lineage_first_tick
+    lineage_hues   = stats._lineage_hues
     if lineage_series:
         totals = {uid: sum(c for _, c in pts) for uid, pts in lineage_series.items()}
         grand  = sum(totals.values())
         top    = sorted(totals, key=totals.__getitem__, reverse=True)[:8]
+
+        lin_traits = _lineage_trait_means(stats, samples)
+
         w(f"\n{'─'*60}")
-        w(f"  lineage dominance  ({len(totals)} total)")
+        w(f"  lineage river  ({len(totals)} total)")
         w(f"{'─'*60}")
         for uid in top:
             first  = lineage_first.get(uid, 0)
@@ -166,6 +271,10 @@ def generate_text(stats, path=None):
             final  = pts[-1][1] if pts else 0
             spark  = _sparkline([c for _, c in pts])
             w(f"  {uid:<10}  born tick {first:>6,}  share {share:>4.0f}%  final {final:>5}  {spark}")
+            t = lin_traits.get(uid)
+            if t:
+                w(f"             size {t['size']:.2f}  speed {t['speed']:.2f}  "
+                  f"pred {t['pred']:.2f}  n_rays {t['n_rays']:.1f}  neurons {t['neurons']:.0f}")
 
     # strategy spread — size vs pred_ratio at final snapshot
     if samples:
@@ -208,7 +317,7 @@ def generate_text(stats, path=None):
     print(f"[report] {path}")
 
 
-def generate(stats, path=None):
+def generate(stats, path=None, world=None, tick=None, write_txt=True):
     try:
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
@@ -232,7 +341,9 @@ def generate(stats, path=None):
 
     figs = []
 
-    figs.append(_fig_lineage_tree(stats))
+    lin_traits = _lineage_trait_means(stats, samples)
+    figs.append(_fig_lineage_tree(stats, lin_traits))
+    figs.append(_fig_lineage_traits(stats, lin_traits))
     figs.append(_fig_population(samples, ticks))
     figs.append(_fig_traits(samples, ticks))
     figs.append(_fig_brain_vision(samples, ticks))
@@ -240,7 +351,8 @@ def generate(stats, path=None):
     figs.append(_fig_rates(samples, ticks))
     figs.append(_fig_drain(samples, ticks))
     figs.append(_fig_genome_heatmap(samples, ticks))
-    figs.append(_fig_phase_scatter(samples))
+    figs.append(_fig_genome_exit(samples))
+    figs.append(_fig_phase_scatter(samples, lin_traits, stats))
 
     # ── apply shared dark theme ───────────────────────────────────────────────
     for fig in figs:
@@ -378,13 +490,14 @@ def generate(stats, path=None):
         f.write(html)
     print(f"[report] written → {path}")
 
-    txt_path = path[:-5] + ".txt" if path.endswith(".html") else path + ".txt"
-    generate_text(stats, txt_path)
+    if write_txt:
+        txt_path = path[:-5] + ".txt" if path.endswith(".html") else path + ".txt"
+        generate_text(stats, txt_path, world=world, tick=tick)
 
 
 # ── individual figures ────────────────────────────────────────────────────────
 
-def _fig_lineage_tree(stats):
+def _fig_lineage_tree(stats, lin_traits=None):
     import plotly.graph_objects as go
 
     hues       = stats._lineage_hues
@@ -445,11 +558,18 @@ def _fig_lineage_tree(stats):
     node_y     = [y_pos.get(n, 0)      for n in nodes]
     node_color = [_hue_to_rgb_css(hues.get(n, 0)) for n in nodes]
     node_size  = [6 + 18 * (totals.get(n, 0) / max_total) for n in nodes]
-    node_text  = [
-        f'lineage {n}<br>first tick {first_tick.get(n,0):,}<br>'
-        f'total wight-ticks {totals.get(n,0)}'
-        for n in nodes
-    ]
+    node_text = []
+    for n in nodes:
+        t = lin_traits.get(n) if lin_traits else None
+        trait_line = (
+            f'<br>size {t["size"]:.2f}  speed {t["speed"]:.2f}  pred {t["pred"]:.2f}'
+            f'<br>n_rays {t["n_rays"]:.1f}  neurons {t["neurons"]:.0f}'
+            if t else ''
+        )
+        node_text.append(
+            f'lineage {n}<br>first tick {first_tick.get(n,0):,}<br>'
+            f'total wight-ticks {totals.get(n,0)}{trait_line}'
+        )
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -689,7 +809,7 @@ def _fig_genome_heatmap(samples, ticks):
     return fig
 
 
-def _fig_phase_scatter(samples):
+def _fig_phase_scatter(samples, lin_traits=None, stats=None):
     import plotly.graph_objects as go
 
     if not samples:
@@ -699,9 +819,20 @@ def _fig_phase_scatter(samples):
     speeds = last.get('speed_all', [])
     preds  = last.get('pred_ratio_all', [])
     hues   = last.get('lineage_hues_all', [])
+    nr_all = last.get('n_rays_all', [])
 
     if not sizes:
         return None
+
+    # build per-wight lineage uid lookup for hover
+    hue_to_uid = {v: k for k, v in stats._lineage_hues.items()} if stats else {}
+    hover = []
+    for i, h in enumerate(hues):
+        uid = hue_to_uid.get(h, '?')
+        t   = (lin_traits or {}).get(uid)
+        nr  = f'  n_rays {nr_all[i]:.0f}' if nr_all else ''
+        lin = f'  lineage {uid}' if t else ''
+        hover.append(f'size {sizes[i]:.2f}  speed {speeds[i]:.2f}  pred {preds[i]:.2f}{nr}{lin}')
 
     colors = [_hue_to_rgb_css(h) for h in hues]
 
@@ -712,20 +843,121 @@ def _fig_phase_scatter(samples):
         name='wights',
         marker=dict(
             color=colors,
-            size=[max(6, s * 1.5) for s in speeds],
-            opacity=0.85,
-            line=dict(width=0.5, color='rgba(255,255,255,0.2)'),
+            size=[max(4, s * 2.5) for s in speeds],
+            opacity=0.75,
+            line=dict(width=0.3, color='rgba(255,255,255,0.15)'),
         ),
-        hovertemplate='size %{x:.2f}<br>pred_ratio %{y:.2f}<extra></extra>',
+        text=hover,
+        hovertemplate='%{text}<extra></extra>',
     ))
     fig.update_layout(
         title=dict(
-            text='phase space — size vs pred_ratio at last sample (color=lineage, marker size=speed)',
+            text='phase space — size vs pred_ratio (color=lineage, marker size=speed, hover=full traits)',
             font=dict(size=12, color='#8b949e'),
         ),
-        height=320,
+        height=360,
         xaxis_title='size',
         yaxis_title='pred_ratio',
+    )
+    return fig
+
+
+def _fig_lineage_traits(stats, lin_traits):
+    """Parallel coordinates — each top lineage is a colored line across trait axes."""
+    import plotly.graph_objects as go
+    from sim.config import SPEED_MIN, SPEED_MAX, SIZE_MIN, SIZE_MAX, PRED_RATIO_MIN, PRED_RATIO_MAX, N_RAYS, N_HIDDEN
+
+    if not lin_traits:
+        return None
+
+    hues   = stats._lineage_hues
+    series = stats._lineage_series
+    totals = {uid: sum(c for _, c in pts) for uid, pts in series.items()}
+    top    = sorted(lin_traits, key=lambda u: totals.get(u, 0), reverse=True)[:12]
+
+    if not top:
+        return None
+
+    # normalize each trait 0-1 within its range for parcoords
+    def _norm(v, lo, hi): return (v - lo) / (hi - lo) if hi > lo else 0.5
+
+    dims = [
+        dict(label='size',    range=[SIZE_MIN, SIZE_MAX],        values=[lin_traits[u]['size']    for u in top]),
+        dict(label='speed',   range=[SPEED_MIN, SPEED_MAX],      values=[lin_traits[u]['speed']   for u in top]),
+        dict(label='pred',    range=[PRED_RATIO_MIN, PRED_RATIO_MAX], values=[lin_traits[u]['pred'] for u in top]),
+        dict(label='n_rays',  range=[0, N_RAYS],                 values=[lin_traits[u]['n_rays']  for u in top]),
+        dict(label='neurons', range=[0, N_HIDDEN],               values=[lin_traits[u]['neurons'] for u in top]),
+    ]
+
+    colors      = [hues.get(u, 0) for u in top]
+    color_strs  = [_hue_to_rgb_css(h) for h in colors]
+    pop_shares  = [totals.get(u, 0) for u in top]
+    grand       = sum(pop_shares)
+    line_widths = [max(1, 6 * s / grand) for s in pop_shares]
+
+    fig = go.Figure()
+    for i, uid in enumerate(top):
+        vals = [d['values'][i] for d in dims]
+        fig.add_trace(go.Scatter(
+            x=[d['label'] for d in dims],
+            y=vals,
+            mode='lines+markers',
+            name=f'lineage {uid}',
+            line=dict(color=color_strs[i], width=max(1.5, line_widths[i])),
+            marker=dict(size=6, color=color_strs[i]),
+            hovertemplate=(
+                f'lineage {uid}<br>'
+                f'size {lin_traits[uid]["size"]:.2f}  '
+                f'speed {lin_traits[uid]["speed"]:.2f}  '
+                f'pred {lin_traits[uid]["pred"]:.2f}<br>'
+                f'n_rays {lin_traits[uid]["n_rays"]:.1f}  '
+                f'neurons {lin_traits[uid]["neurons"]:.0f}  '
+                f'pop share {100*pop_shares[i]/grand:.0f}%'
+                '<extra></extra>'
+            ),
+        ))
+
+    fig.update_layout(
+        title=dict(text='lineage strategy profiles — top clades across key traits (line weight = pop share)',
+                   font=dict(size=12, color='#8b949e')),
+        height=320,
+        xaxis=dict(showgrid=True),
+        yaxis=dict(showgrid=True),
+        showlegend=True,
+    )
+    return fig
+
+
+def _fig_genome_exit(samples):
+    """Horizontal bar chart — each gene's final normalized position within its range."""
+    import plotly.graph_objects as go
+    from sim.stats import GENE_NAMES
+
+    if not samples or 'genes_norm' not in samples[-1]:
+        return None
+
+    vals  = samples[-1]['genes_norm']
+    names = GENE_NAMES
+    colors = [
+        f'hsl({int(v * 240)},70%,55%)' for v in vals
+    ]
+
+    fig = go.Figure(go.Bar(
+        x=vals,
+        y=names,
+        orientation='h',
+        marker=dict(color=colors, line=dict(width=0)),
+        text=[f'{v*100:.0f}%' for v in vals],
+        textposition='outside',
+        hovertemplate='%{y}  %{x:.3f}  (%{text} of range)<extra></extra>',
+    ))
+    fig.update_layout(
+        title=dict(text='genome at exit — each gene normalized 0→1 within its range',
+                   font=dict(size=12, color='#8b949e')),
+        height=520,
+        xaxis=dict(range=[0, 1.15], tickformat='.0%', title='position in range'),
+        yaxis=dict(autorange='reversed'),
+        bargap=0.25,
     )
     return fig
 
@@ -770,14 +1002,50 @@ def _hof_html(hof):
 
 if __name__ == '__main__':
     import sys
+    import argparse
     import numpy as np
-    from game.snapshot import load_snapshot
+    from pathlib import Path
+    from game.snapshot import load_snapshot, SNAPSHOT_PATH
     from sim.stats import StatsCollector
 
-    rng   = np.random.default_rng()
-    world, tick, history, hall_fame, stats = load_snapshot(rng)
-    pop   = world['pop']
+    parser = argparse.ArgumentParser(
+        prog='python report.py',
+        description='Generate run reports from a beetle-brain snapshot.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+examples:
+  python report.py                      html + txt from snapshot.npz
+  python report.py old_run.npz          html + txt from a specific snapshot
+  python report.py --txt                txt only
+  python report.py --html               html only
+  python report.py --stdout             print to terminal, no file written
+  python report.py old_run.npz --html   html only from specific snapshot
+        """.rstrip(),
+    )
+    parser.add_argument('snapshot', nargs='?', default=SNAPSHOT_PATH,
+                        help=f'path to snapshot.npz (default: {SNAPSHOT_PATH})')
+    parser.add_argument('--html',   action='store_true', help='write html report only')
+    parser.add_argument('--txt',    action='store_true', help='write txt report only')
+    parser.add_argument('--stdout', action='store_true',
+                        help='print txt to terminal instead of writing a file (implies --txt)')
+    args = parser.parse_args()
 
+    # --stdout implies txt only
+    if args.stdout:
+        args.txt = True
+
+    # default: both
+    if not args.html and not args.txt:
+        args.html = args.txt = True
+
+    rng   = np.random.default_rng()
+    world, tick, history, hall_fame, stats = load_snapshot(rng, path=args.snapshot)
+
+    if world is None:
+        print(f"[report] no snapshot found at {args.snapshot}")
+        sys.exit(1)
+
+    pop = world['pop']
     if stats is None:
         stats = StatsCollector()
         stats.record(tick, pop, world.get('phylo'))
@@ -787,5 +1055,13 @@ if __name__ == '__main__':
         stats.finalize(tick, 0.0, pop=pop, phylo_state=world.get('phylo'),
                        seed=world.get('seed'))
 
-    generate(stats)
-    print(f"regenerated from snapshot.npz at tick {tick:,}")
+    stem = _report_stem(stats)
+
+    if args.html:
+        generate(stats, path=stem + '.html', world=world, tick=tick, write_txt=False)
+
+    if args.txt:
+        if args.stdout:
+            generate_text(stats, path='/dev/stdout', world=world, tick=tick)
+        else:
+            generate_text(stats, path=stem + '.txt', world=world, tick=tick)
