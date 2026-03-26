@@ -8,5 +8,6 @@ venv/
 .venv/
 build/
 snapshot.npz
-report.html
+report_*.html
+report_*.txt
 *.png

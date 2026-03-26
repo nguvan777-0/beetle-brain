@@ -194,6 +194,7 @@ class StatsCollector:
         session_ticks = tick - (self._tick_start or tick)
         self.run_meta = {
             'ticks':         session_ticks,
+            'final_tick':    tick,
             'elapsed':       elapsed,
             'tps':           session_ticks / elapsed if elapsed > 0 else 0,
             'extinct':       extinct,

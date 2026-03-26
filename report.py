@@ -6,6 +6,22 @@ report.py — generate a self-contained HTML report from a StatsCollector.
 Or call generate(stats, path) directly from run_headless.py / game/main.py.
 """
 import colorsys
+import subprocess
+
+
+def _report_stem(stats):
+    """Build report filename stem: report_{commit}_{seed}_{tick:07d}"""
+    meta = stats.run_meta
+    try:
+        commit = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except Exception:
+        commit = 'unknown'
+    seed = meta.get('seed', 0)
+    tick = meta.get('final_tick', meta.get('ticks', 0))
+    return f"report_{commit}_{seed}_{tick:07d}"
 
 
 def _hue_to_rgb_css(hue, s=0.85, v=0.9):
@@ -18,7 +34,181 @@ def _hue_to_rgba_css(hue, alpha, s=0.85, v=0.9):
     return f"rgba({int(r*255)},{int(g*255)},{int(b*255)},{alpha})"
 
 
-def generate(stats, path="report.html"):
+def _sparkline(series, width=28):
+    import math
+    BLOCKS = " ▁▂▃▄▅▆▇█"
+    lo, hi = min(series), max(series)
+    if hi == lo:
+        return BLOCKS[4] * width
+    norm  = [(v - lo) / (hi - lo) for v in series]
+    idxs  = [round(v * (len(BLOCKS) - 1)) for v in norm]
+    step  = max(1, len(idxs) // width)
+    sampled = idxs[::step][:width]
+    return "".join(BLOCKS[i] for i in sampled)
+
+
+def generate_text(stats, path=None):
+    samples = stats.samples
+    meta    = stats.run_meta
+    hof     = stats.hall_fame
+
+    lines = []
+    w = lines.append
+
+    w("=" * 60)
+    w("  beetle-brain · run report")
+    ticks   = meta.get('ticks', 0)
+    elapsed = meta.get('elapsed', 0)
+    tps     = meta.get('tps', 0)
+    seed    = meta.get('seed', '?')
+    status  = "EXTINCT" if meta.get('extinct') else f"pop {meta.get('final_pop', '?')}"
+    w(f"  {ticks:,} ticks  ·  {elapsed:.1f}s  ·  {tps:,.0f} t/s  ·  seed {seed}  ·  {status}")
+    w("=" * 60)
+
+    if samples:
+        max_age   = max(s['max_age']   for s in samples)
+        max_eaten = max(s['max_eaten'] for s in samples)
+        max_gen   = max(s['max_gen']   for s in samples)
+        w(f"\n  max gen    {max_gen:>6}")
+        w(f"  max age    {max_age:>6,}")
+        w(f"  max eaten  {max_eaten:>6}")
+
+    # hall of fame
+    hof_entries = [
+        ('longest survivor', hof.get('longest')),
+        ('most kills',       hof.get('killer')),
+        ('eldest lineage',   hof.get('eldest')),
+    ]
+    if any(v for _, v in hof_entries):
+        w(f"\n{'─'*60}")
+        w("  hall of fame")
+        w(f"{'─'*60}")
+        for title, wight in hof_entries:
+            if wight is None:
+                continue
+            w(f"  {title}")
+            w(f"    age {wight['age']:,}  ·  ate {wight['eaten']}  ·  gen {wight['generation']}")
+            w(f"    size {wight['size']:.2f}  speed {wight['speed']:.2f}  "
+              f"fov {wight['fov_deg']:.1f}°  pred {wight['pred_ratio']:.2f}")
+
+    # trajectory
+    if samples and len(samples) > 1:
+        sticks = [s['tick'] for s in samples]
+        smid   = len(samples) // 2
+        t0, tm, t1 = sticks[0], sticks[smid], sticks[-1]
+
+        w(f"\n{'─'*60}")
+        w(f"  trajectory  (tick {t0:,} → {tm:,} → {t1:,})")
+        w(f"{'─'*60}")
+
+        def col(key):
+            return [s[key] for s in samples]
+
+        rows = [
+            ("pop",          col('pop')),
+            ("max_gen",      col('max_gen')),
+            ("size",         col('size_mean')),
+            ("speed",        col('speed_mean')),
+            ("fov°",         col('fov_mean_deg')),
+            ("pred_ratio",   col('pred_ratio_mean')),
+            ("mut_rate",     col('mutation_mean')),
+            ("hgt_eat",      col('hgt_eat_mean')),
+            ("hgt_contact",  col('hgt_contact_mean')),
+            ("n_rays",       col('n_rays_mean')),
+            ("active_neur",  col('active_neurons_mean')),
+        ]
+        for label, series in rows:
+            v0, vm, v1 = series[0], series[smid], series[-1]
+            spark = _sparkline(series)
+            w(f"  {label:<12}  {v0:>6.1f} → {vm:>6.1f} → {v1:>6.1f}  {spark}")
+
+        # drain
+        w(f"\n  drain / tick (mean at end)")
+        for key, label in [
+            ('drain_kleiber', 'kleiber'),
+            ('drain_speed',   'speed'),
+            ('drain_size',    'size'),
+            ('drain_sensing', 'sensing'),
+            ('drain_brain',   'brain'),
+        ]:
+            if key in samples[-1]:
+                series = col(key)
+                w(f"    {label:<10}  {series[-1]:>7.4f}  {_sparkline(series)}")
+
+    # genome at exit
+    if samples and 'genes_norm' in samples[-1]:
+        from sim.stats import GENE_NAMES
+        gene_vals = samples[-1]['genes_norm']
+        w(f"\n{'─'*60}")
+        w(f"  genome at exit  (position within each gene's range)")
+        w(f"{'─'*60}")
+        BAR = "░▏▎▍▌▋▊▉█"
+        for name, val in zip(GENE_NAMES, gene_vals):
+            filled = int(val * 10)
+            frac   = val * 10 - filled
+            bar    = "█" * filled + BAR[round(frac * 8)] + "░" * (9 - filled)
+            w(f"  {name:<16}  {bar}  {val*100:>3.0f}%")
+
+    # lineage dominance
+    lineage_series = stats._lineage_series
+    lineage_first  = stats._lineage_first_tick
+    if lineage_series:
+        totals = {uid: sum(c for _, c in pts) for uid, pts in lineage_series.items()}
+        grand  = sum(totals.values())
+        top    = sorted(totals, key=totals.__getitem__, reverse=True)[:8]
+        w(f"\n{'─'*60}")
+        w(f"  lineage dominance  ({len(totals)} total)")
+        w(f"{'─'*60}")
+        for uid in top:
+            first  = lineage_first.get(uid, 0)
+            share  = 100 * totals[uid] / grand if grand else 0
+            pts    = lineage_series[uid]
+            final  = pts[-1][1] if pts else 0
+            spark  = _sparkline([c for _, c in pts])
+            w(f"  {uid:<10}  born tick {first:>6,}  share {share:>4.0f}%  final {final:>5}  {spark}")
+
+    # strategy spread — size vs pred_ratio at final snapshot
+    if samples:
+        last   = samples[-1]
+        sizes  = last.get('size_all', [])
+        preds  = last.get('pred_ratio_all', [])
+        speeds = last.get('speed_all', [])
+        if sizes and preds:
+            import math
+            n_pop   = len(sizes)
+            sz_mean = sum(sizes) / n_pop
+            pr_mean = sum(preds) / n_pop
+            sz_std  = math.sqrt(sum((x - sz_mean)**2 for x in sizes) / n_pop)
+            pr_std  = math.sqrt(sum((x - pr_mean)**2 for x in preds) / n_pop)
+            sp_mean = sum(speeds) / n_pop
+            # rough cluster check: bimodal if std is large relative to range
+            sz_range = max(sizes) - min(sizes)
+            pr_range = max(preds) - min(preds)
+            sz_cv = sz_std / sz_mean if sz_mean else 0
+            pr_cv = pr_std / pr_mean if pr_mean else 0
+            cluster_hint = ""
+            if sz_cv > 0.08 or pr_cv > 0.08:
+                cluster_hint = "  — spread suggests multiple strategies"
+            else:
+                cluster_hint = "  — tight cluster, monoculture"
+            w(f"\n{'─'*60}")
+            w(f"  strategy spread at final snapshot{cluster_hint}")
+            w(f"{'─'*60}")
+            w(f"  size        mean {sz_mean:>5.2f}  std {sz_std:>4.2f}  range {min(sizes):.2f}–{max(sizes):.2f}")
+            w(f"  pred_ratio  mean {pr_mean:>5.2f}  std {pr_std:>4.2f}  range {min(preds):.2f}–{max(preds):.2f}")
+            w(f"  speed       mean {sp_mean:>5.2f}")
+
+    w("")
+
+    if path is None:
+        path = _report_stem(stats) + ".txt"
+    text = "\n".join(lines)
+    with open(path, "w") as f:
+        f.write(text)
+    print(f"[report] {path}")
+
+
+def generate(stats, path=None):
     try:
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
@@ -182,9 +372,14 @@ def generate(stats, path="report.html"):
 </body>
 </html>"""
 
+    if path is None:
+        path = _report_stem(stats) + ".html"
     with open(path, 'w') as f:
         f.write(html)
     print(f"[report] written → {path}")
+
+    txt_path = path[:-5] + ".txt" if path.endswith(".html") else path + ".txt"
+    generate_text(stats, txt_path)
 
 
 # ── individual figures ────────────────────────────────────────────────────────
@@ -580,13 +775,17 @@ if __name__ == '__main__':
     from sim.stats import StatsCollector
 
     rng   = np.random.default_rng()
-    world, tick, history, hall_fame = load_snapshot(rng)
+    world, tick, history, hall_fame, stats = load_snapshot(rng)
     pop   = world['pop']
 
-    stats = StatsCollector()
-    stats.record(tick, pop, world.get('phylo'))
-    stats.finalize(tick, 0.0, pop=pop, phylo_state=world.get('phylo'),
-                   seed=world.get('seed'))
+    if stats is None:
+        stats = StatsCollector()
+        stats.record(tick, pop, world.get('phylo'))
+        stats.finalize(tick, 0.0, pop=pop, phylo_state=world.get('phylo'),
+                       seed=world.get('seed'))
+    elif not stats.run_meta:
+        stats.finalize(tick, 0.0, pop=pop, phylo_state=world.get('phylo'),
+                       seed=world.get('seed'))
 
     generate(stats)
     print(f"regenerated from snapshot.npz at tick {tick:,}")

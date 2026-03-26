@@ -36,7 +36,7 @@ else:
     history = []
 
     def _on_exit():
-        save_snapshot(world, tick, history, [])
+        save_snapshot(world, tick, history, [], stats)
         print("\n" + "─" * 60)
         import runpy
         _argv, sys.argv = sys.argv, ["parse_snapshot.py"]
