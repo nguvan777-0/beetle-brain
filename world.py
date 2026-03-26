@@ -37,13 +37,6 @@ else:
 
     def _on_exit():
         save_snapshot(world, tick, history, [], stats)
-        print("\n" + "─" * 60)
-        import runpy
-        _argv, sys.argv = sys.argv, ["parse_snapshot.py"]
-        try:
-            runpy.run_path("parse_snapshot.py")
-        finally:
-            sys.argv = _argv
 
     atexit.register(_on_exit)
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
@@ -95,5 +88,9 @@ else:
     stats.finalize(tick, elapsed, pop=pop if not extinct else None,
                    phylo_state=world['phylo'], extinct=extinct, seed=world.get('seed'))
 
-    from report import generate
-    generate(stats)
+    from pathlib import Path
+    from report import generate, _report_stem
+    generate(stats, world=world if not extinct else None, tick=tick)
+    txt_path = _report_stem(stats) + ".txt"
+    if Path(txt_path).exists():
+        print("\n" + Path(txt_path).read_text())
