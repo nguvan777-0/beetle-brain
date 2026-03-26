@@ -5,6 +5,30 @@ without:       uv run --with numpy --with coremltools --with plotly python world
 """
 import sys
 
+if sys.version_info < (3, 11):
+    print()
+    print(f"  beetle-brain requires Python 3.11+  (you're on {sys.version.split()[0]})")
+    print()
+    print("  with uv:")
+    print("    uv run --with numpy --with pygame --with coremltools --with plotly python world.py")
+    print()
+    print("  or switch to 3.11+ via pyenv, conda, or your package manager.")
+    print()
+    sys.exit(1)
+
+try:
+    import numpy  # noqa: F401
+except ImportError:
+    print()
+    print("  missing dependencies — numpy is required, pygame/coremltools/plotly are optional.")
+    print()
+    print("  with uv:")
+    print("    uv run --with numpy --with pygame --with coremltools --with plotly python world.py")
+    print()
+    print("  or install numpy into your active environment.")
+    print()
+    sys.exit(1)
+
 try:
     import pygame
     _has_pygame = True
