@@ -235,10 +235,14 @@ def init_world():
     world[0, 0] = np.random.rand(H_GRID, W_GRID) * 0.3    # Wild food
     return world
 
-def drop_organism(world, gx, gy):
+def drop_organism(world, gx, gy, lineage_id=None):
     """Spawns an organism with fully random brain weights."""
     world[0, 1, gy, gx] = 1.0 # Max Energy
-    world[0, 2:, gy, gx] = np.random.randn(CH_WEIGHTS) * 4.0 # Random 15 weights
+    weights = np.random.randn(CH_WEIGHTS) * 4.0
+    if lineage_id is not None and lineage_id < 12:
+        # Boost this specific weight so it dominates and locks in the founder's species color!
+        weights[lineage_id] = 20.0
+    world[0, 2:, gy, gx] = weights
 
 def main():
     headless_ticks = None
@@ -279,9 +283,9 @@ def main():
     model = get_model()
     world = init_world()
     
-    # Spawn 50 starters for a good test
-    for _ in range(50):
-        drop_organism(world, np.random.randint(W_GRID), np.random.randint(H_GRID))
+    # Spawn 12 starting founders, perfectly seeding the 12 rainbow lineages!
+    for i in range(12):
+        drop_organism(world, np.random.randint(W_GRID), np.random.randint(H_GRID), lineage_id=i)
 
     if is_headless:
         print(f"\nRunning simulation headless for {headless_ticks} ticks...")
