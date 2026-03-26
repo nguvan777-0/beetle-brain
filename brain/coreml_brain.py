@@ -19,7 +19,7 @@ Hunger, spatial memory, fear, anticipation — whatever helps survival emerges.
 Falls back to numpy einsum if CoreML unavailable.
 """
 from __future__ import annotations
-import json, threading, time
+import json, os, threading, time
 from pathlib import Path
 import numpy as np
 
@@ -40,6 +40,11 @@ _n_in       = 0
 _n_hid      = 0
 _n_out      = 0
 _use_coreml = False
+
+
+def _compute_unit():
+    name = os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU').upper()
+    return getattr(ct.ComputeUnit, name, ct.ComputeUnit.CPU_AND_GPU)
 
 
 def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bool:
@@ -71,7 +76,7 @@ def _load_or_compile(max_pop, n_inputs, n_hidden, n_outputs):
                     and meta.get("recurrent") == True and meta.get("has_wh") == True
                     and meta.get("has_bias") == True):
                 t0 = time.time()
-                model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
+                model = ct.models.MLModel(str(MODEL_PATH), compute_units=_compute_unit())
                 _model = model
                 _use_coreml = True
                 print(f"[Brain] ready ({time.time()-t0:.1f}s)")
@@ -112,7 +117,7 @@ def _load_or_compile(max_pop, n_inputs, n_hidden, n_outputs):
         META_PATH.write_text(json.dumps(
             {"max_pop": max_pop, "n_in": n_inputs, "n_hid": n_hidden,
              "n_out": n_outputs, "recurrent": True, "has_wh": True, "has_bias": True}))
-        model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
+        model = ct.models.MLModel(str(MODEL_PATH), compute_units=_compute_unit())
         _model = model
         _use_coreml = True
         print(f" done ({time.time()-t0:.1f}s)")
