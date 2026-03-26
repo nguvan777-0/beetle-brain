@@ -6,7 +6,7 @@ from sim.config import (
     ENERGY_MAX_SCALE, DRAIN_SCALE, SIZE_TAX, SPEED_TAX, TURN_TAX, AGE_TAX, SENSING_TAX, BRAIN_TAX
 )
 from sim.vents import refill_vents
-from sim.grid.painter import paint_grid
+from sim.grid.painter import paint_idx_grid
 from sim.predation import predation
 from sim.evolution import clone_batch
 from sim.hgt import eat_hgt, contact_hgt
@@ -23,8 +23,8 @@ def tick(world, rng):
     energy_max  = ENERGY_MAX_SCALE * pop['size'] ** 2   # storage ∝ volume
 
     # ── sense + brain (fused GPU dispatch) ───────────────────────────────────
-    grid, idx_grid = paint_grid(pop, food)
-    h_new, out     = run_sense_brain(pop, grid[0], grid[1], grid[2], grid[3])
+    idx_grid   = paint_idx_grid(pop)
+    h_new, out = run_sense_brain(pop, food)
     pop['h_state'] = h_new
     turns  = out[:, 0] * pop['turn_s']
     speeds = (out[:, 1] + 1.0) * pop['speed']

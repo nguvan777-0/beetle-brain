@@ -20,3 +20,6 @@ for _r in range(1, int(np.ceil(SIZE_MAX * GRID_SCALE)) + 1):
     _dy, _dx = np.mgrid[-_r:_r + 1, -_r:_r + 1]
     _m = (_dy ** 2 + _dx ** 2) <= _r ** 2
     _DISK_OFFSETS[_r] = (_dy[_m].astype(np.int32), _dx[_m].astype(np.int32))
+
+DILATION_R_PIX = int(np.ceil(SIZE_MAX * GRID_SCALE))   # largest organism disk radius in grid pixels
+DILATION_K     = 2 * DILATION_R_PIX + 1               # max-pool kernel size for disk dilation
