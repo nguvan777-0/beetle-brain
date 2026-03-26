@@ -60,11 +60,9 @@ try:
 except ImportError:
     _has_pygame = False
 
-_force_headless = args.new or args.seed is not None or args.fork is not None
-
-if _has_pygame and not _force_headless:
+if _has_pygame:
     from game.main import main
-    main()
+    main(new=args.new, seed=args.seed, fork=args.fork)
 else:
     import atexit
     import signal
@@ -79,10 +77,10 @@ else:
 
     init_ane()
 
-    force_new = _force_headless and args.fork is None
+    force_new = (args.new or args.seed is not None) and args.fork is None
 
     # load snapshot unless --new or --seed
-    world, tick, history, _hf, stats = load_snapshot(np.random.default_rng())
+    world, tick, history, _hf, stats = load_snapshot(np.random.default_rng(args.fork))
     if force_new or world is None or len(world['pop']['x']) == 0:
         seed  = args.seed if args.seed is not None else None
         world = new_world(seed=seed)
