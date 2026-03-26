@@ -111,7 +111,12 @@ def build_discrete_nca_model():
             c = mb.cast(x=mb.equal(x=best_idx_expanded, y=d_val), dtype="fp32")
             onehot_channels.append(c)
             
-        intent_1hot = mb.concat(values=onehot_channels, axis=1) # Shape: (1, 5, H, W)
+        raw_intent_1hot = mb.concat(values=onehot_channels, axis=1) # Shape: (1, 5, H, W)
+        
+        # Prevent completely empty background cells from generating "ghost" movement intentions
+        # that secretly steal priority in the tensor collision ladder and delete living organisms!
+        has_energy = mb.cast(x=mb.greater(x=energy, y=np.float32(0.0)), dtype="fp32")
+        intent_1hot = mb.mul(x=raw_intent_1hot, y=has_energy)
         
         # 5. SHIFT-AND-MASK TO RESOLVE MOVEMENT
         # Mode "circular" creates a Torus geometry: organisms walking off the Right edge
@@ -152,13 +157,13 @@ def build_discrete_nca_model():
         shifted_energy = mb.slice_by_index(x=final_org, begin=[0,0,0,0], end=[1,1,H_GRID,W_GRID])
         shifted_weights = mb.slice_by_index(x=final_org, begin=[0,1,0,0], end=[1,CH_ORG,H_GRID,W_GRID])
         
-        # Burn energy every tick
-        post_move_energy = mb.sub(x=shifted_energy, y=np.float32(0.02))
+        # Burn energy every tick (lowered to 0.01 so they have longer life spans to hunt)
+        post_move_energy = mb.sub(x=shifted_energy, y=np.float32(0.01))
         is_there = mb.cast(x=mb.greater(x=post_move_energy, y=np.float32(0.0)), dtype="fp32")
         
-        # If alive, eat the food we are standing on (up to 0.7 units)
+        # If alive, eat the food we are standing on (eat MORE per tick so they max out fully)
         can_eat = mb.mul(x=food_layer, y=is_there)
-        food_eaten = mb.clip(x=can_eat, alpha=np.float32(0.0), beta=np.float32(0.7))
+        food_eaten = mb.clip(x=can_eat, alpha=np.float32(0.0), beta=np.float32(0.9))
         
         # Update biological energy 
         new_energy = mb.add(x=post_move_energy, y=food_eaten)
@@ -302,7 +307,7 @@ def main():
         world = list(out.values())[0]
         
         # Background physics: global food regeneration bounds
-        world[0, 0] += np.random.rand(H_GRID, W_GRID) * 0.015
+        world[0, 0] += np.random.rand(H_GRID, W_GRID) * 0.02
         world[0, 0] = np.clip(world[0,0], 0.0, 1.0)
         
         # Render visual channels
