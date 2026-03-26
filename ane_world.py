@@ -270,7 +270,8 @@ def main():
             out = model.predict({"world": world, "mutation": mutation})
             world = list(out.values())[0]
             
-            world[0, 0] += np.random.rand(H_GRID, W_GRID) * 0.015
+            # Matched exactly to Pygame logic!
+            world[0, 0] += np.random.rand(H_GRID, W_GRID) * 0.02
             world[0, 0] = np.clip(world[0,0], 0.0, 1.0)
             
             if True:
