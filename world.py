@@ -1,8 +1,4 @@
-"""beetle-brain — one entry point.
-
-with pygame:   uv run --with numpy --with pygame --with coremltools --with plotly python world.py [seconds]
-without:       uv run --with numpy --with coremltools --with plotly python world.py [seconds]
-"""
+"""beetle-brain — one entry point."""
 import sys
 
 if sys.version_info < (3, 11):
@@ -29,13 +25,44 @@ except ImportError:
     print()
     sys.exit(1)
 
+import argparse
+
+parser = argparse.ArgumentParser(
+    prog='world.py',
+    description=(
+        'beetle-brain  —  neuroevolution in a living world\n'
+        '\n'
+        'quick start (with pygame):\n'
+        '  uv run --with numpy --with pygame --with coremltools --with plotly python world.py\n'
+        '\n'
+        'headless (no pygame required):\n'
+        '  uv run --with numpy --with coremltools --with plotly python world.py\n'
+        '\n'
+        'headless runs for 30 seconds by default, then exits with a report.\n'
+        'pass a duration (seconds) to change the limit, or 0 to run until Ctrl-C or extinction.\n'
+        'a report is always written on exit.'
+    ),
+    formatter_class=argparse.RawTextHelpFormatter,
+)
+parser.add_argument('duration', nargs='?', type=float, default=30.0,
+                    help='stop after this many seconds  (default: 30, 0 = run until Ctrl-C or extinction)')
+parser.add_argument('--seed',  type=int, metavar='X',
+                    help='start a new world with seed X  (ignores any saved snapshot)')
+parser.add_argument('--new',   action='store_true',
+                    help='start a new world with a random seed  (ignores any saved snapshot)')
+parser.add_argument('--fork',  type=int, metavar='X',
+                    help='load snapshot but run forward with a different RNG seed X')
+args = parser.parse_args()
+
 try:
     import pygame
     _has_pygame = True
 except ImportError:
     _has_pygame = False
 
-if _has_pygame:
+_force_headless = args.new or args.seed is not None or args.fork is not None
+
+if _has_pygame and not _force_headless:
     from game.main import main
     main()
 else:
@@ -47,28 +74,12 @@ else:
     from sim.stats import StatsCollector, SAMPLE_EVERY
     from game.snapshot import save_snapshot, load_snapshot
 
-    import argparse
-    parser = argparse.ArgumentParser(
-        prog='world.py',
-        description='beetle-brain headless sim',
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-    parser.add_argument('duration', nargs='?', type=float, default=30.0,
-                        help='run duration in seconds (default: 30)')
-    parser.add_argument('--seed',  type=int, metavar='X',
-                        help='start a new world with seed X  (ignores snapshot)')
-    parser.add_argument('--new',   action='store_true',
-                        help='start a new world with a random seed  (ignores snapshot)')
-    parser.add_argument('--fork',  type=int, metavar='X',
-                        help='load snapshot but run forward with RNG seed X')
-    args = parser.parse_args()
-
-    DURATION     = args.duration
+    DURATION     = args.duration if args.duration else None  # 0 means run forever
     REPORT_EVERY = 500
 
     init_ane()
 
-    force_new = args.new or args.seed is not None
+    force_new = _force_headless and args.fork is None
 
     # load snapshot unless --new or --seed
     world, tick, history, _hf, stats = load_snapshot(np.random.default_rng())
@@ -120,7 +131,7 @@ else:
 
     while True:
         elapsed = time.time() - t0
-        if elapsed >= DURATION:
+        if DURATION is not None and elapsed >= DURATION:
             break
 
         world = sim_tick(world, rng)
