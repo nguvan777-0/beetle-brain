@@ -28,11 +28,15 @@ MODEL_PATH = "build/ane_nca_world.mlpackage"
 # To process movement, every pixel "pulls" the state of agents wanting to enter it.
 def create_pull_kernels():
     k_stay = np.zeros((1, 1, 3, 3), dtype=np.float32); k_stay[0,0,1,1] = 1.0     
-    k_pull_S = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_S[0,0,0,1] = 1.0 
-    k_pull_N = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_N[0,0,2,1] = 1.0 
-    k_pull_W = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_W[0,0,1,2] = 1.0 
-    k_pull_E = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_E[0,0,1,0] = 1.0 
-    return [k_stay, k_pull_S, k_pull_N, k_pull_W, k_pull_E]
+    # Intent 1: Move North -> We pull from the cell BELOW us (Bottom)
+    k_pull_from_B = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_from_B[0,0,2,1] = 1.0 
+    # Intent 2: Move South -> We pull from the cell ABOVE us (Top)
+    k_pull_from_T = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_from_T[0,0,0,1] = 1.0 
+    # Intent 3: Move East -> We pull from the cell to our LEFT
+    k_pull_from_L = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_from_L[0,0,1,0] = 1.0 
+    # Intent 4: Move West -> We pull from the cell to our RIGHT
+    k_pull_from_R = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_from_R[0,0,1,2] = 1.0 
+    return [k_stay, k_pull_from_B, k_pull_from_T, k_pull_from_L, k_pull_from_R]
 
 def mb_circular_pad(x):
     """
