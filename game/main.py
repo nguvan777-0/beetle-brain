@@ -38,8 +38,7 @@ def _pca_proj(W_body):
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    ane_ok = init_ane()
-    print("[ANE] CoreML brain ready" if ane_ok else "[ANE] Using numpy fallback")
+    init_ane()
 
     pygame.init()
     surf    = pygame.display.set_mode((TOTAL_W, sim.HEIGHT))
