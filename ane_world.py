@@ -268,13 +268,13 @@ def main():
         
         # UI State
         import collections
-        pop_history = collections.deque(maxlen=280)
+        lineage_history = collections.deque(maxlen=280)
         
-        # Deterministic color projection for 15 genes to RGB
-        np.random.seed(42)
-        color_proj = np.random.rand(15, 3)
-        color_proj = color_proj / color_proj.sum(axis=0)
-        np.random.seed(int(time.time()))
+        _LINEAGE_COLORS = [
+            (255,   0,   0), (255, 128,   0), (255, 255,   0), (128, 255,   0), # Red, Orange, Yellow, Chartreuse
+            (  0, 255,   0), (  0, 255, 128), (  0, 255, 255), (  0, 128, 255), # Green, Spring Green, Cyan, Sky Blue
+            (  0,   0, 255), (128,   0, 255), (255,   0, 255), (255,   0, 128), # Blue, Purple, Magenta, Rose
+        ]
 
     model = get_model()
     world = init_world()
@@ -347,14 +347,21 @@ def main():
         weights = t[2:]
         y_idx, x_idx = np.nonzero(orgs > 0)
         pop = len(y_idx)
-        pop_history.append(pop)
+        
+        # Track lineages for this frame
+        current_lineages = collections.defaultdict(int)
         
         for y, x in zip(y_idx, x_idx):
             energy = orgs[y, x]
             w = weights[:, y, x]
             
-            # Lineage color projection from their 15 neural weights
-            c = np.clip(np.dot(w, color_proj) * 80 + 128, 50, 255).astype(int)
+            # Simple analytical lineage clustering!
+            # Since mitosis rarely flips the dominant weight, 
+            # argmax over the first 12 genes creates stable hereditary species.
+            lid = int(np.argmax(w[:12]))
+            current_lineages[lid] += 1
+            
+            c = _LINEAGE_COLORS[lid]
             
             # Position & pulsating size based on energy
             cx = x * RENDER_SCALE + RENDER_SCALE // 2
@@ -363,12 +370,14 @@ def main():
             
             # Body & Core Outline
             pygame.draw.circle(screen, c, (cx, cy), r)
-            pygame.draw.circle(screen, (255, 255, 255), (cx, cy), r, max(1, r//4))
+            pygame.draw.circle(screen, (255, 255, 255), (cx, cy), r, max(1, r//3))
             
-            # Orientation heuristic: using their first trait [0] as an angular heading
+            # Orientation heuristic: sweeping white line mapped to continuous trait 0
             ax = cx + int(np.cos(w[0] * np.pi) * r * 1.8)
             ay = cy + int(np.sin(w[0] * np.pi) * r * 1.8)
             pygame.draw.line(screen, (255, 255, 255), (cx, cy), (ax, ay), max(1, RENDER_SCALE//8))
+            
+        lineage_history.append(dict(current_lineages))
             
         # 3. Draw Side HUD
         hud_x = W_PX + 20
@@ -379,27 +388,52 @@ def main():
         # Stats
         stats_y = 90
         screen.blit(font.render(f"tick {tick_count:7d}", True, (255, 255, 255)), (hud_x, stats_y)); stats_y += 20
-        screen.blit(font.render(f"pop  {pop:7d}", True, (255, 255, 255)), (hud_x, stats_y)); stats_y += 40
+        screen.blit(font.render(f"pop  {pop:7d}", True, (255, 255, 255)), (hud_x, stats_y)); stats_y += 30
         
-        # Micro Line Chart for Population
-        screen.blit(font.render("POPULATION HISTORY", True, (150, 150, 150)), (hud_x, stats_y)); stats_y += 20
-        ch_w, ch_h = 280, 80
-        pygame.draw.rect(screen, (25, 25, 30), (hud_x, stats_y, ch_w, ch_h))
-        if len(pop_history) > 1:
-            max_p = max(max(pop_history), 1)
-            pts = [(hud_x + i, stats_y + ch_h - int((p / max_p) * ch_h)) for i, p in enumerate(pop_history)]
-            pts.insert(0, (hud_x, stats_y + ch_h)) # Pin to bottom left
-            pts.append((hud_x + len(pop_history) - 1, stats_y + ch_h)) # Pin to bottom right
-            
-            # Fill under the line chart
-            pygame.draw.polygon(screen, (100, 60, 40), pts)
-            # Top boundary line
-            pts = [(hud_x + i, stats_y + ch_h - int((p / max_p) * ch_h)) for i, p in enumerate(pop_history)]
-            pygame.draw.lines(screen, (240, 150, 50), False, pts, 2)
-            
-            # Live Max text 
-            screen.blit(font.render(f"max: {max_p}", True, (100, 100, 100)), (hud_x + ch_w - 70, stats_y - 20))
-            
+        # LINEAGES Over Time (Rainbow Stacked Area Chart)
+        screen.blit(font.render("LINEAGES over time", True, (200, 180, 140)), (hud_x, stats_y)); stats_y += 20
+        rx, ry, rw, rh = hud_x, stats_y, 280, 100
+        
+        pygame.draw.rect(screen, (20, 20, 25), (rx, ry, rw, rh))
+        if len(lineage_history) > 1:
+            all_ids = sorted({aid for frame in lineage_history for aid in frame})
+            T = len(lineage_history)
+            for t_idx in range(T):
+                frame = lineage_history[t_idx]
+                total = max(1, sum(frame.values()))
+                lx = rx + int(t_idx * rw / T)
+                lx1 = rx + int((t_idx + 1) * rw / T)
+                bot = ry + rh
+                
+                # Draw vertical sliver for each species
+                for aid in all_ids:
+                    count = frame.get(aid, 0)
+                    if count == 0: continue
+                    h = int(count / total * rh)
+                    if h <= 0: continue
+                    top = bot - h
+                    pygame.draw.rect(screen, _LINEAGE_COLORS[aid], (lx, top, max(1, lx1 - lx), h))
+                    bot = top
+                    
+            # Top boundary line for total style
+            pts = [(rx + i * rw // T, ry + rh - int(sum(lineage_history[i].values()) / max(1, max(sum(f.values()) for f in lineage_history)) * rh)) for i in range(T)]
+            pygame.draw.lines(screen, (240, 150, 50), False, pts, 1)
+
+        stats_y += rh + 10
+        
+        # Top Living Lineages Legend
+        if current_lineages:
+            lx_iter = hud_x
+            for aid, cnt in sorted(current_lineages.items(), key=lambda kv: -kv[1])[:10]:
+                color = _LINEAGE_COLORS[aid]
+                pygame.draw.circle(screen, color, (lx_iter + 4, stats_y + 5), 5)
+                screen.blit(font.render(f"{cnt}", True, color), (lx_iter + 12, stats_y))
+                lx_iter += 45
+                
+                if lx_iter > hud_x + rw - 35:
+                    lx_iter = hud_x
+                    stats_y += 20
+        
         pygame.display.flip()
         
         clock.tick(60)
