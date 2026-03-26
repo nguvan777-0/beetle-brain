@@ -12,8 +12,9 @@ except ImportError:
 
 # --- Configuration ---
 W_GRID, H_GRID = 64, 64
-RENDER_SCALE = 8
+RENDER_SCALE = 12
 W_PX, H_PX = W_GRID * RENDER_SCALE, H_GRID * RENDER_SCALE
+HUD_WIDTH = 320
 
 CH_FOOD = 1
 CH_ENERGY = 1
@@ -250,10 +251,30 @@ def main():
     is_headless = headless_ticks is not None
 
     if not is_headless:
+        os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
         pygame.init()
-        screen = pygame.display.set_mode((W_PX, H_PX))
+        screen = pygame.display.set_mode((W_PX + HUD_WIDTH, H_PX))
         pygame.display.set_caption("Beetle Brain - Discrete ANE")
+        
+        # Load fonts
+        try:
+            font = pygame.font.SysFont("courier", 14, bold=True)
+            font_large = pygame.font.SysFont("courier", 24, bold=True)
+        except:
+            font = pygame.font.SysFont(None, 14, bold=True)
+            font_large = pygame.font.SysFont(None, 24, bold=True)
+            
         clock = pygame.time.Clock()
+        
+        # UI State
+        import collections
+        pop_history = collections.deque(maxlen=280)
+        
+        # Deterministic color projection for 15 genes to RGB
+        np.random.seed(42)
+        color_proj = np.random.rand(15, 3)
+        color_proj = color_proj / color_proj.sum(axis=0)
+        np.random.seed(int(time.time()))
 
     model = get_model()
     world = init_world()
@@ -285,11 +306,9 @@ def main():
         return
 
     running = True
+    tick_count = 0
     print("\nSimulation Started!")
-    print(" - Clicking spawns an organism. They now step exactly without smearing!")
-    print(" - Red   = Food")
-    print(" - Green = Organism")
-    print(" - Blue  = Neural Weight [0] (Vision)")
+    print(" - Clicking spawns an organism.")
     
     while running:
         for event in pygame.event.get():
@@ -313,25 +332,78 @@ def main():
         
         # Render visual channels
         t = world[0]
-        rgb = np.zeros((H_GRID, W_GRID, 3), dtype=np.uint8)
         
-        # Dim green for food so it looks like background algae
-        rgb[..., 1] = np.clip(t[0] * 100.0, 0, 255) 
-        
-        org_mask = t[1] > 0
-        # Draw organisms
-        rgb[org_mask, 0] = np.clip(t[1][org_mask] * 255.0, 80, 255) # Red base from energy
-        rgb[org_mask, 1] = np.clip(t[1][org_mask] * 255.0, 80, 255) # Green base from energy
-        rgb[org_mask, 2] = np.clip((t[2][org_mask] + 2.0) * 60.0, 0, 255) # Blue varies by genes
-        
-        rgb = np.transpose(rgb, (1, 0, 2))
-        surf = pygame.surfarray.make_surface(rgb)
+        # 1. Background Space & Food Surface
+        screen.fill((15, 15, 20)) # Dark void
+        rgba = np.zeros((H_GRID, W_GRID, 3), dtype=np.uint8)
+        rgba[..., 1] = np.clip(t[0] * 70.0, 0, 255) # Dim green for food algae
+        rgba = np.transpose(rgba, (1, 0, 2))
+        surf = pygame.surfarray.make_surface(rgba)
         surf_scaled = pygame.transform.scale(surf, (W_PX, H_PX))
-        
         screen.blit(surf_scaled, (0, 0))
+        
+        # 2. Draw Organisms dynamically
+        orgs = t[1]
+        weights = t[2:]
+        y_idx, x_idx = np.nonzero(orgs > 0)
+        pop = len(y_idx)
+        pop_history.append(pop)
+        
+        for y, x in zip(y_idx, x_idx):
+            energy = orgs[y, x]
+            w = weights[:, y, x]
+            
+            # Lineage color projection from their 15 neural weights
+            c = np.clip(np.dot(w, color_proj) * 80 + 128, 50, 255).astype(int)
+            
+            # Position & pulsating size based on energy
+            cx = x * RENDER_SCALE + RENDER_SCALE // 2
+            cy = y * RENDER_SCALE + RENDER_SCALE // 2
+            r = int((0.5 + energy * 0.5) * RENDER_SCALE * 0.9)
+            
+            # Body & Core Outline
+            pygame.draw.circle(screen, c, (cx, cy), r)
+            pygame.draw.circle(screen, (255, 255, 255), (cx, cy), r, max(1, r//4))
+            
+            # Orientation heuristic: using their first trait [0] as an angular heading
+            ax = cx + int(np.cos(w[0] * np.pi) * r * 1.8)
+            ay = cy + int(np.sin(w[0] * np.pi) * r * 1.8)
+            pygame.draw.line(screen, (255, 255, 255), (cx, cy), (ax, ay), max(1, RENDER_SCALE//8))
+            
+        # 3. Draw Side HUD
+        hud_x = W_PX + 20
+        # Title
+        screen.blit(font_large.render("BEETLE-BRAIN", True, (200, 200, 220)), (hud_x, 20))
+        screen.blit(font.render("DISCRETE ANE", True, (100, 100, 150)), (hud_x, 45))
+        
+        # Stats
+        stats_y = 90
+        screen.blit(font.render(f"tick {tick_count:7d}", True, (255, 255, 255)), (hud_x, stats_y)); stats_y += 20
+        screen.blit(font.render(f"pop  {pop:7d}", True, (255, 255, 255)), (hud_x, stats_y)); stats_y += 40
+        
+        # Micro Line Chart for Population
+        screen.blit(font.render("POPULATION HISTORY", True, (150, 150, 150)), (hud_x, stats_y)); stats_y += 20
+        ch_w, ch_h = 280, 80
+        pygame.draw.rect(screen, (25, 25, 30), (hud_x, stats_y, ch_w, ch_h))
+        if len(pop_history) > 1:
+            max_p = max(max(pop_history), 1)
+            pts = [(hud_x + i, stats_y + ch_h - int((p / max_p) * ch_h)) for i, p in enumerate(pop_history)]
+            pts.insert(0, (hud_x, stats_y + ch_h)) # Pin to bottom left
+            pts.append((hud_x + len(pop_history) - 1, stats_y + ch_h)) # Pin to bottom right
+            
+            # Fill under the line chart
+            pygame.draw.polygon(screen, (100, 60, 40), pts)
+            # Top boundary line
+            pts = [(hud_x + i, stats_y + ch_h - int((p / max_p) * ch_h)) for i, p in enumerate(pop_history)]
+            pygame.draw.lines(screen, (240, 150, 50), False, pts, 2)
+            
+            # Live Max text 
+            screen.blit(font.render(f"max: {max_p}", True, (100, 100, 100)), (hud_x + ch_w - 70, stats_y - 20))
+            
         pygame.display.flip()
         
         clock.tick(60)
+        tick_count += 1
         pygame.display.set_caption(f"Beetle Brain - ANE Discrete Evolution | {clock.get_fps():.0f} FPS")
 
     pygame.quit()
