@@ -1,7 +1,7 @@
 """Stats collector: samples population state every N ticks for post-run reporting."""
 import numpy as np
 from sim.config import (
-    DRAIN_SCALE, SPEED_TAX, SIZE_TAX, SENSING_TAX,
+    DRAIN_SCALE, SPEED_TAX, SIZE_TAX, SENSING_TAX, BRAIN_TAX,
     SPEED_MIN, SPEED_MAX, FOV_MIN, FOV_MAX, RAY_MIN, RAY_MAX,
     SIZE_MIN, SIZE_MAX, MOUTH_MIN, MOUTH_MAX,
     PRED_RATIO_MIN, PRED_RATIO_MAX,
@@ -11,7 +11,7 @@ from sim.config import (
     WEIGHT_DECAY_MIN, WEIGHT_DECAY_MAX,
     HGT_EAT_MIN, HGT_EAT_MAX, HGT_CONTACT_MIN, HGT_CONTACT_MAX,
     BREED_AT_MIN, BREED_AT_MAX, CLONE_WITH_MIN, CLONE_WITH_MAX,
-    N_RAYS,
+    N_RAYS, N_HIDDEN,
 )
 from sim import phylo as _phylo
 
@@ -38,6 +38,7 @@ GENES = [
     ('hgt_eat_rate',     'hgt_eat',      HGT_EAT_MIN,      HGT_EAT_MAX),
     ('hgt_contact_rate', 'hgt_contact',  HGT_CONTACT_MIN,  HGT_CONTACT_MAX),
     ('n_rays',           'n_rays',       0,                N_RAYS),
+    ('active_neurons',   'active_neur',  0,                N_HIDDEN),
 ]
 GENE_NAMES = [g[1] for g in GENES]
 
@@ -74,6 +75,8 @@ class StatsCollector:
         spd_tax   = speeds ** 2 * SPEED_TAX
         sz_tax    = pop['size'] ** 2 * SIZE_TAX
         sen_tax   = pop['ray_len'] * pop['fov'] * SENSING_TAX
+        an        = pop.get('active_neurons', np.zeros(N))
+        brn_tax   = an ** 1.5 * BRAIN_TAX
 
         # ── normalized genome heatmap row ──────────────────────────────────────
         gene_row = []
@@ -122,13 +125,17 @@ class StatsCollector:
             'pred_ratio_mean':  float(pop['pred_ratio'].mean()),
             'mutation_mean':    float(pop['mutation_rate'].mean()),
             'hgt_eat_mean':     float(pop['hgt_eat_rate'].mean()),
-            'hgt_contact_mean': float(pop['hgt_contact_rate'].mean()),
+            'hgt_contact_mean':     float(pop['hgt_contact_rate'].mean()),
+            'n_rays_mean':          float(pop['n_rays'].mean()) if 'n_rays' in pop else 0.0,
+            'n_rays_min':           float(pop['n_rays'].min())  if 'n_rays' in pop else 0.0,
+            'active_neurons_mean':  float(an.mean()),
             # drain breakdown (per tick, per wight)
             'drain_kleiber':    float(kleiber.mean()),
             'drain_speed':      float(spd_tax.mean()),
             'drain_size':       float(sz_tax.mean()),
             'drain_sensing':    float(sen_tax.mean()),
-            # genome heatmap row (18 values, each 0-1 normalized)
+            'drain_brain':      float(brn_tax.mean()),
+            # genome heatmap row (20 values, each 0-1 normalized)
             'genes_norm':       gene_row,
             # final-snapshot data for scatter
             'size_all':         pop['size'].tolist(),
