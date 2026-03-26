@@ -45,6 +45,7 @@ def generate(stats, path="report.html"):
     figs.append(_fig_lineage_tree(stats))
     figs.append(_fig_population(samples, ticks))
     figs.append(_fig_traits(samples, ticks))
+    figs.append(_fig_brain_vision(samples, ticks))
     figs.append(_fig_sensing(samples, ticks))
     figs.append(_fig_rates(samples, ticks))
     figs.append(_fig_drain(samples, ticks))
@@ -89,12 +90,16 @@ def generate(stats, path="report.html"):
     )
     seed_span = (f'<span class="metric">seed <b>{meta["seed"]}</b></span>'
                  if meta.get('seed') is not None else '')
+    max_age   = max((s['max_age']   for s in samples), default=0)
+    max_eaten = max((s['max_eaten'] for s in samples), default=0)
     summary_html = f"""
     <div class="summary">
       <span class="metric"><b>{meta.get('ticks',0):,}</b> ticks</span>
       <span class="metric"><b>{meta.get('elapsed',0):.1f}s</b> elapsed</span>
       <span class="metric"><b>{meta.get('tps',0):,.0f}</b> ticks/sec</span>
       <span class="metric"><b>{meta.get('final_max_gen',0)}</b> max gen</span>
+      <span class="metric"><b>{max_age:,}</b> max age</span>
+      <span class="metric"><b>{max_eaten}</b> max eaten</span>
       {seed_span}
       {extinct_badge}
     </div>"""
@@ -342,6 +347,41 @@ def _fig_traits(samples, ticks):
     return fig
 
 
+def _fig_brain_vision(samples, ticks):
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_trace(go.Scatter(
+        x=ticks, y=[s.get('active_neurons_mean', 0) for s in samples],
+        mode='lines', name='active neurons (mean)',
+        line=dict(color='#7ecfff', width=2),
+        fill='tozeroy', fillcolor='rgba(126,207,255,0.08)',
+        hovertemplate='tick %{x:,}<br>active neurons %{y:.1f}<extra></extra>',
+    ), secondary_y=False)
+    fig.add_trace(go.Scatter(
+        x=ticks, y=[s.get('n_rays_mean', 0) for s in samples],
+        mode='lines', name='n_rays (mean)',
+        line=dict(color='#ffd580', width=2),
+        hovertemplate='tick %{x:,}<br>n_rays %{y:.2f}<extra></extra>',
+    ), secondary_y=True)
+    fig.add_trace(go.Scatter(
+        x=ticks, y=[s.get('n_rays_min', 0) for s in samples],
+        mode='lines', name='n_rays (min)',
+        line=dict(color='#ffd580', width=1, dash='dot'),
+        showlegend=False, hoverinfo='skip',
+    ), secondary_y=True)
+    fig.update_layout(
+        title=dict(text='brain & vision — active neurons vs ray count over time',
+                   font=dict(size=12, color='#8b949e')),
+        height=260,
+    )
+    fig.update_yaxes(title_text='active neurons (0–32)', secondary_y=False)
+    fig.update_yaxes(title_text='n_rays (0–7)', secondary_y=True,
+                     range=[0, 7], gridcolor='rgba(0,0,0,0)')
+    return fig
+
+
 def _fig_sensing(samples, ticks):
     import plotly.graph_objects as go
 
@@ -400,6 +440,7 @@ def _fig_drain(samples, ticks):
         ('speed²',              'drain_speed',   '#ffcc44'),
         ('size²',               'drain_size',    '#ff6699'),
         ('sensing (ray×fov)',   'drain_sensing', '#9966ff'),
+        ('brain (neur^1.5)',    'drain_brain',   '#7ecfff'),
     ]
     fig = go.Figure()
     for name, key, color in components:
@@ -445,7 +486,7 @@ def _fig_genome_heatmap(samples, ticks):
         hovertemplate='tick %{x:,}<br>gene %{y}<br>norm value %{z:.3f}<extra></extra>',
     ))
     fig.update_layout(
-        title=dict(text='genome heatmap — all 18 genes, normalized 0→1 within range', font=dict(size=12, color='#8b949e')),
+        title=dict(text='genome heatmap — all 20 genes, normalized 0→1 within range', font=dict(size=12, color='#8b949e')),
         height=380,
         yaxis=dict(autorange='reversed', tickfont=dict(size=10)),
         xaxis_title='tick',
@@ -533,4 +574,19 @@ def _hof_html(hof):
 
 
 if __name__ == '__main__':
-    print("report is generated at end of each run — use run_headless.py or the pygame sim")
+    import sys
+    import numpy as np
+    from game.snapshot import load_snapshot
+    from sim.stats import StatsCollector
+
+    rng   = np.random.default_rng()
+    world, tick, history, hall_fame = load_snapshot(rng)
+    pop   = world['pop']
+
+    stats = StatsCollector()
+    stats.record(tick, pop, world.get('phylo'))
+    stats.finalize(tick, 0.0, pop=pop, phylo_state=world.get('phylo'),
+                   seed=world.get('seed'))
+
+    generate(stats)
+    print(f"regenerated from snapshot.npz at tick {tick:,}")
