@@ -16,13 +16,15 @@ Requires Python 3.11+ and numpy. `coremltools`, `pygame`, and `plotly` are optio
 uv run --with numpy --with coremltools --with pygame --with plotly python world.py
 ```
 
-To run headless at max speed, pass a duration in seconds:
+To run headless at max speed (runs until Ctrl-C or extinction, then writes a report):
 
 ```bash
-uv run --with numpy --with coremltools --with plotly python world.py 60
+uv run --with numpy --with coremltools --with plotly python world.py 0
 ```
 
-Without `plotly` the exit report is skipped. Without `coremltools` the brain runs on numpy. The first run compiles two CoreML models and caches them to `build/` — takes a couple of seconds, then it's fast.
+Pass a duration in seconds for a timed run, or omit for the default 30s. `python world.py --help` lists all flags.
+
+Without `plotly` the exit report is skipped. Without `coremltools` the brain runs on numpy. The first run compiles two CoreML models and caches them to `build/`.
 
 **Keys:** `SPACE` cycle speed (1×/5×/20×/100×) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
@@ -143,6 +145,22 @@ The `.txt` covers the same run — trait means at exit, sparkline trajectories, 
     tick  8,405  size crossed 90% — ceiling locked
     tick  4,905  fastest size change (6.85→7.35)
 ```
+
+## Performance
+
+Measured on Apple Silicon (Mac mini M4). All numbers are headless, `--new`, full sim loop.
+
+| backend | load time | tick rate |
+|---------|-----------|-----------|
+| CoreML `CPU_AND_GPU` ✓ | ~0.1s | ~120–140 t/s |
+| CoreML `ALL` (ANE)     | ~7s   | ~100–110 t/s |
+| CoreML `CPU_ONLY`      | ~0.1s | ~60–80 t/s   |
+| numpy fallback         | instant | ~30–50 t/s |
+
+CoreML models load in a background thread — the sim starts on numpy and switches to GPU automatically within the first tick. No visible pause.
+
+`CPU_AND_GPU` is the default. ANE (`ALL`) costs 7s of startup for ANE compilation and ends up slower on this workload — the per-wight batched matmuls at `MAX_POP` suit the GPU better than the ANE.
+
 
 ## License
 
