@@ -83,7 +83,7 @@ On exit (ESC, quit, or end of headless run) two files are written: `report_{comm
 
 The HTML opens in any browser — fully offline. Charts: lineage tree, genome heatmap (20 genes × time), phase scatter, drain breakdown, hall of fame.
 
-The `.txt` covers the same run — trait means at exit, sparkline trajectories, drain by component, lineage dominance, strategy spread, key moments:
+The `.txt` covers the same run — trait means at exit, sparkline trajectories, drain by component, lineage river, strategy spread, key moments:
 
 ```
 ============================================================
@@ -123,7 +123,7 @@ The `.txt` covers the same run — trait means at exit, sparkline trajectories, 
     brain        0.0093  ▂▂▄▁▂ ▁▄▅▄▆█▄▂▃▃▆▅▂
 
 ────────────────────────────────────────────────────────────
-  lineage dominance  (147 total)
+  lineage river  (147 total)
 ────────────────────────────────────────────────────────────
   6           born tick      0  share    7%  final    91  ▁▁▂▃▄▆▇█▅▄█▅▅
   393         born tick  5,905  share    5%  final   274  ▁▃▇█
