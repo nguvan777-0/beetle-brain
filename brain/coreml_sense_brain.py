@@ -12,7 +12,7 @@ O(1) wall-clock in population size (up to MAX_POP hardware limit).
 Fallback: numpy sense + CoreML brain (the old path) when compilation fails.
 """
 from __future__ import annotations
-import json, time
+import json, threading, time
 from pathlib import Path
 import numpy as np
 
@@ -37,10 +37,15 @@ _use_coreml = False
 
 
 def init_sense_brain() -> bool:
-    global _model, _use_coreml
-
     if not _HAS_CT:
         return False
+
+    threading.Thread(target=_load_or_compile, daemon=True).start()
+    return False  # numpy fallback until thread finishes
+
+
+def _load_or_compile():
+    global _model, _use_coreml
 
     if MODEL_PATH.exists() and META_PATH.exists():
         try:
@@ -52,12 +57,14 @@ def init_sense_brain() -> bool:
                     meta.get("n_hid") == N_HIDDEN and meta.get("n_out") == N_OUTPUTS and
                     meta.get("has_nrays_mask") is True and meta.get("has_wh") == True and
                     meta.get("has_rgb") == True and meta.get("has_bias") == True):
-                _model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.ALL)
+                t0 = time.time()
+                model = ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
+                _model = model
                 _use_coreml = True
-                print(f"[SenseBrain] Loaded cached model ({MODEL_PATH.name})")
-                return True
+                print(f"[SenseBrain] ready ({time.time()-t0:.1f}s)")
+                return
         except Exception as e:
-            print(f"[SenseBrain] Cache load failed ({e}), rebuilding...")
+            print(f"[SenseBrain] cache load failed ({e}), rebuilding...")
 
     print(f"[SenseBrain] Compiling fused sense+brain "
           f"(pop={MAX_POP}, rays={N_RAYS}, steps={MAX_STEPS}, "
@@ -65,13 +72,12 @@ def init_sense_brain() -> bool:
           end="", flush=True)
     t0 = time.time()
     try:
-        _model      = _compile()
+        model = _compile()
+        _model      = model
         _use_coreml = True
         print(f" done ({time.time() - t0:.1f}s)")
-        return True
     except Exception as e:
         print(f" FAILED: {e}")
-        return False
 
 
 def _compile():
@@ -246,7 +252,7 @@ def _compile():
         return h_new, out
 
     model = ct.convert(prog,
-                       compute_units=ct.ComputeUnit.ALL,
+                       compute_units=ct.ComputeUnit.CPU_AND_GPU,
                        minimum_deployment_target=ct.target.macOS13)
     MODEL_PATH.parent.mkdir(exist_ok=True)
     model.save(str(MODEL_PATH))
@@ -255,7 +261,7 @@ def _compile():
         "gw": GW, "gh": GH, "n_hid": N_HIDDEN, "n_out": N_OUTPUTS,
         "has_nrays_mask": True, "has_wh": True, "has_rgb": True, "has_bias": True,
     }))
-    return ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.ALL)
+    return ct.models.MLModel(str(MODEL_PATH), compute_units=ct.ComputeUnit.CPU_AND_GPU)
 
 
 # ── public inference ──────────────────────────────────────────────────────────
