@@ -52,7 +52,7 @@ def main():
     rng = np.random.default_rng()
 
     world, tick, history, hall_fame, _saved_stats = load_snapshot(rng)
-    if world is None:
+    if world is None or len(world['pop']['x']) == 0:
         world     = new_world()
         tick      = 0
         history   = []
@@ -75,12 +75,16 @@ def main():
         # ── events ────────────────────────────────────────────────────────────
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                save_snapshot(world, tick, history, hall_fame, stats)
-                _exit_with_report(stats, tick, world, t_start, extinct=False)
+                is_extinct = len(world['pop']['x']) == 0
+                if not is_extinct:
+                    save_snapshot(world, tick, history, hall_fame, stats)
+                _exit_with_report(stats, tick, world, t_start, extinct=is_extinct)
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                save_snapshot(world, tick, history, hall_fame, stats)
-                _exit_with_report(stats, tick, world, t_start, extinct=False)
+                is_extinct = len(world['pop']['x']) == 0
+                if not is_extinct:
+                    save_snapshot(world, tick, history, hall_fame, stats)
+                _exit_with_report(stats, tick, world, t_start, extinct=is_extinct)
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_l:
                 result = load_snapshot(rng)
