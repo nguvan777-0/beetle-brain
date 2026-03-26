@@ -262,11 +262,13 @@ def main():
         
         # Load fonts
         try:
-            font = pygame.font.SysFont("courier", 14, bold=True)
-            font_large = pygame.font.SysFont("courier", 24, bold=True)
+            font = pygame.font.SysFont("monospace", 12)
+            font_sm = pygame.font.SysFont("monospace", 10)
+            font_lg = pygame.font.SysFont("monospace", 14, bold=True)
         except:
-            font = pygame.font.SysFont(None, 14, bold=True)
-            font_large = pygame.font.SysFont(None, 24, bold=True)
+            font = pygame.font.SysFont(None, 12)
+            font_sm = pygame.font.SysFont(None, 10)
+            font_lg = pygame.font.SysFont(None, 14, bold=True)
             
         clock = pygame.time.Clock()
         
@@ -386,7 +388,7 @@ def main():
         # 3. Draw Side HUD
         hud_x = W_PX + 20
         # Title
-        screen.blit(font_large.render("BEETLE-BRAIN", True, (200, 200, 220)), (hud_x, 20))
+        screen.blit(font_lg.render("BEETLE-BRAIN", True, (200, 200, 220)), (hud_x, 20))
         screen.blit(font.render("DISCRETE ANE", True, (100, 100, 150)), (hud_x, 45))
         
         # Stats
