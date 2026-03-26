@@ -137,10 +137,12 @@ class StatsCollector:
             'drain_brain':      float(brn_tax.mean()),
             # genome heatmap row (20 values, each 0-1 normalized)
             'genes_norm':       gene_row,
-            # final-snapshot data for scatter
+            # final-snapshot data for scatter + per-lineage traits
             'size_all':         pop['size'].tolist(),
             'speed_all':        speeds.tolist(),
             'pred_ratio_all':   pop['pred_ratio'].tolist(),
+            'n_rays_all':       pop['n_rays'].tolist() if 'n_rays' in pop else [0] * N,
+            'active_neurons_all': an.tolist(),
             'lineage_hues_all': ([float(self._lineage_hues.get(
                                     int(_phylo.ancestor_at(np.array([iid]), max(4, int(pop['generation'].max()) // 3), phylo_state)[0]),
                                     0.0))

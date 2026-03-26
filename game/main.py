@@ -228,7 +228,7 @@ def _exit_with_report(stats, tick, world, t_start, extinct):
     pop = world['pop'] if not extinct else None
     stats.finalize(tick, elapsed, pop=pop, phylo_state=world['phylo'], extinct=extinct,
                    seed=world.get('seed'))
-    generate_report(stats)
+    generate_report(stats, world=world if not extinct else None, tick=tick)
 
 
 def _draw_extinction_overlay(surf, font, font_lg, tick):

@@ -53,10 +53,10 @@ def _migrate_w1(w1):
     return w1
 
 
-def load_snapshot(rng):
-    if not os.path.exists(SNAPSHOT_PATH):
+def load_snapshot(rng, path=SNAPSHOT_PATH):
+    if not os.path.exists(path):
         return None, 0, [], [], None
-    d      = np.load(SNAPSHOT_PATH, allow_pickle=True)
+    d      = np.load(path, allow_pickle=True)
     W_body = d['W_body'].astype(np.float32)
     t      = decode(W_body)
     n      = len(d['x'])
