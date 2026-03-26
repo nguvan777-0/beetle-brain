@@ -452,7 +452,7 @@ def main():
                 u, s, vh = np.linalg.svd(W_cen, full_matrices=False)
                 proj = np.dot(W_cen, vh[:2].T)
                 
-                screen.blit(font.render("STRATEGY SPACE  (W_brain PCA)", True, (160, 180, 220)), (hud_x, stats_y)); stats_y += 15
+                screen.blit(font.render("STRATEGY SPACE  (W_wight PCA)", True, (160, 180, 220)), (hud_x, stats_y)); stats_y += 15
                 pca_h = 130
                 pygame.draw.rect(screen, (20, 20, 25), (hud_x, stats_y, rw, pca_h))
                 pygame.draw.rect(screen, (40, 40, 50), (hud_x, stats_y, rw, pca_h), 1)
