@@ -473,6 +473,70 @@ def main():
                     screen.set_at((x_c+1, y_c+1), _LINEAGE_COLORS[lid])
             except:
                 pass
+            stats_y += pca_h + 20
+
+        # Trait Map
+        if pop > 0:
+            screen.blit(font.render("TRAITS (median | p10-p90 band)", True, (160, 180, 220)), (hud_x, stats_y)); stats_y += 15
+            W_pop = weights[:, y_idx, x_idx].T # (pop, 15)
+            if pop > 1:
+                p10 = np.percentile(W_pop, 10, axis=0)
+                med = np.median(W_pop, axis=0)
+                p90 = np.percentile(W_pop, 90, axis=0)
+            else:
+                p10 = med = p90 = W_pop[0]
+                
+            trait_names = [
+                "Stay:Food", "Stay:Scent", "Stay:nrg",
+                "N:Food", "N:Scent", "N:nrg",
+                "S:Food", "S:Scent", "S:nrg",
+                "E:Food", "E:Scent", "E:nrg",
+                "W:Food", "W:Scent", "W:nrg"
+            ]
+            
+            # Map values from [-8, 8] to pixel width
+            v_min, v_max = -8.0, 8.0
+            
+            def _lerp_color(t_val, lo=(60, 100, 200), mid=(60, 200, 120), hi=(220, 80, 60)):
+                if t_val < 0.5:
+                    s = t_val * 2
+                    return tuple(int(lo[j] + (mid[j] - lo[j]) * s) for j in range(3))
+                s = (t_val - 0.5) * 2
+                return tuple(int(mid[j] + (hi[j] - mid[j]) * s) for j in range(3))
+            
+            for i, name in enumerate(trait_names):
+                # Text
+                screen.blit(font_sm.render(f"{name:<11}", True, (140, 140, 160)), (hud_x, stats_y))
+                
+                # Bars
+                bar_x = hud_x + 90
+                bar_w = 180
+                row_h = 13
+                
+                # Background track for visualization
+                pygame.draw.rect(screen, (20, 20, 32), (bar_x, stats_y + 1, bar_w, row_h - 2))
+                
+                # Zero line
+                z_x = bar_x + int((0 - v_min) / (v_max - v_min) * bar_w)
+                pygame.draw.line(screen, (40, 40, 50), (z_x, stats_y), (z_x, stats_y + row_h))
+                
+                def sx(v):
+                    return max(0, min(bar_w, int((v - v_min) / (v_max - v_min) * bar_w)))
+                
+                x10, xmed, x90 = sx(p10[i]), sx(med[i]), sx(p90[i])
+                
+                n_med_norm = np.clip((med[i] - v_min) / (v_max - v_min), 0, 1)
+                color = _lerp_color(n_med_norm)
+                dim = tuple(c // 4 for c in color)
+                
+                # Background p10-p90 band (dim rainbow tinted)
+                if x90 > x10:
+                    pygame.draw.rect(screen, dim, (bar_x + x10, stats_y + 1, x90 - x10, row_h - 2))
+                
+                # Median marker
+                pygame.draw.rect(screen, color, (bar_x + xmed - 1, stats_y, 3, row_h))
+                
+                stats_y += row_h + 1
         
         pygame.display.flip()
         
