@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import numpy as np
 import pygame
 
@@ -14,83 +15,133 @@ W_GRID, H_GRID = 64, 64
 RENDER_SCALE = 8
 W_PX, H_PX = W_GRID * RENDER_SCALE, H_GRID * RENDER_SCALE
 
-CH_STATE = 4    # 0:Food, 1:Energy, 2:Memory, 3:Pheromones
-CH_WEIGHTS = 16 # 4x4 weights for the pixel-wise brain
-CH_TOTAL = CH_STATE + CH_WEIGHTS
+CH_FOOD = 1
+CH_ENERGY = 1
+CH_WEIGHTS = 15 # 3 senses * 5 intentions = 15 parameters
+CH_ORG = CH_ENERGY + CH_WEIGHTS
+CH_TOTAL = CH_FOOD + CH_ORG
 
 MODEL_PATH = "build/ane_nca_world.mlpackage"
 
-# --- 1. The ANE Native Brain & Physics ---
-def build_ane_model():
-    """
-    Builds the core simulation logic natively for the Apple Neural Engine.
-    Implements a self-referential Neural Cellular Automata where every pixel
-    applies its own customized weight-channels to its state-channels.
-    """
-    # 3x3 depthwise kernel: applies a slight blur/diffusion to all channels.
-    # This acts as our "Movement" & "Sensing" step organically.
-    diffuse_kernel = np.array([
-        [[0.05, 0.10, 0.05],
-         [0.10, 0.40, 0.10],
-         [0.05, 0.10, 0.05]]
-    ], dtype=np.float32).reshape(1, 1, 3, 3)
+# --- Directional Kernels for Discrete Shifting ---
+# We represent 5 discrete choices: 0:Stay, 1:North, 2:South, 3:East, 4:West
+# To process movement, every pixel "pulls" the state of agents wanting to enter it.
+def create_pull_kernels():
+    k_stay = np.zeros((1, 1, 3, 3), dtype=np.float32); k_stay[0,0,1,1] = 1.0     
+    k_pull_S = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_S[0,0,2,1] = 1.0 
+    k_pull_N = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_N[0,0,0,1] = 1.0 
+    k_pull_W = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_W[0,0,1,0] = 1.0 
+    k_pull_E = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_E[0,0,1,2] = 1.0 
+    return [k_stay, k_pull_S, k_pull_N, k_pull_W, k_pull_E]
+
+def build_discrete_nca_model():
+    """Builds a discrete Shift-and-Mask agent simulator on the Apple Neural Engine."""
+    kernels = create_pull_kernels()
+    pull_k_org = [np.repeat(k, CH_ORG, axis=0) for k in kernels]     # Shift the 16 organism channels
+    pull_k_int = [np.repeat(k, 5, axis=0) for k in kernels]          # Shift the 5 intention output channels
     
-    # Broadcast to all channels for depthwise execution
-    w_diffuse = np.repeat(diffuse_kernel, CH_TOTAL, axis=0)
+    # Simple uniform blur for food sensing
+    k_blur = np.ones((1, 1, 3, 3), dtype=np.float32) / 9.0
 
     @mb.program(input_specs=[mb.TensorSpec(shape=(1, CH_TOTAL, H_GRID, W_GRID))])
-    def nca_step(world_grid):
-        # Step 1: Spatial Diffusion (Sensing and Movement)
-        padded = mb.pad(x=world_grid, pad=[0, 0, 0, 0, 1, 1, 1, 1], mode="constant", constant_val=np.float32(0.0))
-        sensed = mb.conv(x=padded, weight=w_diffuse, pad_type="valid", groups=CH_TOTAL)
-
-        # Step 2: Extract State (X) and Pixel-wise Weights (W)
-        # We manually slice channels to execute X * W per-pixel dynamically.
-        X = []
-        for i in range(CH_STATE):
-            ch = mb.slice_by_index(x=sensed, begin=[0, i, 0, 0], end=[1, i+1, H_GRID, W_GRID])
-            X.append(ch)
-
-        # Step 3: Evaluate Brain dynamically mapping State -> Deltas
-        deltas = []
-        for i in range(CH_STATE):
-            neuron_sum = None
-            for j in range(CH_STATE):
-                w_idx = CH_STATE + (i * CH_STATE) + j
-                W_ij = mb.slice_by_index(x=sensed, begin=[0, w_idx, 0, 0], end=[1, w_idx+1, H_GRID, W_GRID])
-                
-                # Point-wise multiply state channel * weight channel
-                term = mb.mul(x=X[j], y=W_ij)
-                
-                if neuron_sum is None:
-                    neuron_sum = term
-                else:
-                    neuron_sum = mb.add(x=neuron_sum, y=term)
-                    
-            # Non-linear activation for the biological response
-            deltas.append(mb.tanh(x=neuron_sum))
-
-        # Concatenate delta channels back together
-        state_delta = mb.concat(values=deltas, axis=1)
-
-        # Extract old state and weights
-        old_state = mb.slice_by_index(x=sensed, begin=[0, 0, 0, 0], end=[1, CH_STATE, H_GRID, W_GRID])
-        weights   = mb.slice_by_index(x=sensed, begin=[0, CH_STATE, 0, 0], end=[1, CH_TOTAL, H_GRID, W_GRID])
-
-        # Apply physics/biology rules
-        # New State = (Old State + Brain Delta)
-        # However, we decay it slightly to simulate metabolism / entropy!
-        decayed = mb.mul(x=old_state, y=np.float32(0.95))
-        new_state = mb.add(x=decayed, y=state_delta)
-
-        # Recombine world
-        new_world = mb.concat(values=[new_state, weights], axis=1)
+    def nca_step(world):
+        # 1. SLICE WORLD CHANNELS
+        food_layer = mb.slice_by_index(x=world, begin=[0,0,0,0], end=[1,1,H_GRID,W_GRID])
+        org_layer  = mb.slice_by_index(x=world, begin=[0,1,0,0], end=[1,CH_TOTAL,H_GRID,W_GRID])
+        energy     = mb.slice_by_index(x=org_layer, begin=[0,0,0,0], end=[1,1,H_GRID,W_GRID])
+        weights    = mb.slice_by_index(x=org_layer, begin=[0,1,0,0], end=[1,CH_ORG,H_GRID,W_GRID])
         
-        # Clamp to prevent runaway numerical explosions
-        new_world = mb.clip(x=new_world, alpha=np.float32(-1.0), beta=np.float32(1.0))
-        return new_world
+        # 2. SENSING
+        pad_food = mb.pad(x=food_layer, pad=[0, 0, 0, 0, 1, 1, 1, 1], mode="constant", constant_val=np.float32(0.0))
+        blur_food = mb.conv(x=pad_food, weight=k_blur, pad_type="valid")
+        senses = [food_layer, blur_food, energy] # 3 Inputs to the neural net
+        
+        # 3. ORGANISM BRAIN (Map 3 Senses -> 5 Intentions)
+        intent_channels = []
+        for out_idx in range(5):
+            net = None
+            for in_idx in range(3):
+                w_idx = (out_idx * 3) + in_idx
+                # Dynamic pixel-local weights acting as a dense layer
+                w_ch = mb.slice_by_index(x=weights, begin=[0,w_idx,0,0], end=[1,w_idx+1,H_GRID,W_GRID])
+                term = mb.mul(x=senses[in_idx], y=w_ch)
+                if net is None: net = term
+                else: net = mb.add(x=net, y=term)
+                
+            # Break ties purely deterministically by adding a tiny unique offset to each directional channel
+            tie_breaker = np.float32(out_idx * 0.001)
+            net = mb.add(x=net, y=tie_breaker)
+            intent_channels.append(net)
+            
+        intent_scores = mb.concat(values=intent_channels, axis=1) # Shape: (1, 5, H, W)
+        
+        # 4. CHOOSE ONLY 1 DISCRETE ACTION PER PIXEL
+        max_score = mb.reduce_max(x=intent_scores, axes=[1], keep_dims=True)
+        is_max = mb.equal(x=intent_scores, y=max_score)
+        intent_1hot = mb.cast(x=is_max, dtype="fp32")   
+        
+        # 5. SHIFT-AND-MASK TO RESOLVE MOVEMENT
+        pad_org = mb.pad(x=org_layer, pad=[0,0,0,0,1,1,1,1], mode="constant", constant_val=np.float32(0.0))
+        pad_int = mb.pad(x=intent_1hot, pad=[0,0,0,0,1,1,1,1], mode="constant", constant_val=np.float32(0.0))
+        
+        cands_org = []
+        cands_valid = []
+        
+        for d in range(5):
+            # Pull the neighbor's state and intention into this pixel
+            sh_org = mb.conv(x=pad_org, weight=pull_k_org[d], pad_type="valid", groups=CH_ORG)
+            sh_int = mb.conv(x=pad_int, weight=pull_k_int[d], pad_type="valid", groups=5)
+            # Did the neighbor we pulled actually *choose* to move in direction 'd'?
+            v = mb.slice_by_index(x=sh_int, begin=[0,d,0,0], end=[1,d+1,H_GRID,W_GRID])
+            
+            cands_org.append(sh_org)
+            cands_valid.append(v)
+            
+        # Collision resolution: Priority ladder (Stay > N > S > E > W)
+        final_org = None
+        cum_w = None
+        for d in range(5):
+            # W marks if this candidate is the single winner permitted to enter the cell
+            if d == 0:
+                w = cands_valid[0]
+                cum_w = w
+            else:
+                w = mb.mul(x=cands_valid[d], y=mb.sub(x=np.float32(1.0), y=cum_w))
+                cum_w = mb.add(x=cum_w, y=w)
+            # Add winner into the new state (Losers are multiplied by 0.0)
+            term = mb.mul(x=cands_org[d], y=w)
+            if final_org is None: final_org = term
+            else: final_org = mb.add(x=final_org, y=term)
+            
+        # 6. SURVIVAL & METABOLISM
+        shifted_energy = mb.slice_by_index(x=final_org, begin=[0,0,0,0], end=[1,1,H_GRID,W_GRID])
+        shifted_weights = mb.slice_by_index(x=final_org, begin=[0,1,0,0], end=[1,CH_ORG,H_GRID,W_GRID])
+        
+        # Burn energy every tick
+        post_move_energy = mb.sub(x=shifted_energy, y=np.float32(0.02))
+        is_there = mb.cast(x=mb.greater(x=post_move_energy, y=np.float32(0.0)), dtype="fp32")
+        
+        # If alive, eat the food we are standing on (up to 0.7 units)
+        can_eat = mb.mul(x=food_layer, y=is_there)
+        food_eaten = mb.clip(x=can_eat, alpha=np.float32(0.0), beta=np.float32(0.7))
+        
+        # Update biological energy 
+        new_energy = mb.add(x=post_move_energy, y=food_eaten)
+        new_energy = mb.clip(x=new_energy, alpha=np.float32(0.0), beta=np.float32(1.0))
+        new_food = mb.sub(x=food_layer, y=food_eaten)
+        
+        # Final death mask: IF energy <= 0, weights get zeroed perfectly clean!
+        is_alive = mb.cast(x=mb.greater(x=new_energy, y=np.float32(0.0)), dtype="fp32")
+        final_energy = mb.mul(x=new_energy, y=is_alive)
+        final_weights = mb.mul(x=shifted_weights, y=is_alive)
+        
+        # Reconstruct exactly matching channels
+        next_org = mb.concat(values=[final_energy, final_weights], axis=1)
+        next_world = mb.concat(values=[new_food, next_org], axis=1)
+        
+        return next_world
 
-    print(f"Compiling self-referential grid ({CH_TOTAL} channels) for ANE...")
+    print(f"Compiling Discrete Physics NCA Engine ({CH_TOTAL} channels) for ANE...")
     return ct.convert(
         nca_step, 
         compute_units=ct.ComputeUnit.CPU_AND_NE,
@@ -100,107 +151,107 @@ def build_ane_model():
 def get_model():
     if not os.path.exists(MODEL_PATH):
         os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        model = build_ane_model()
+        model = build_discrete_nca_model()
         model.save(MODEL_PATH)
     return ct.models.MLModel(MODEL_PATH)
 
-# --- 2. Simulation Environment Pipeline ---
+# --- Runtime & Pygame ---
 def init_world():
-    """Generates initial grid with random noise and structured organisms."""
     world = np.zeros((1, CH_TOTAL, H_GRID, W_GRID), dtype=np.float32)
-    
-    # 1. Random bursts of food
-    world[0, 0] = np.random.rand(H_GRID, W_GRID) * 0.5
-    
-    # 2. Spawn simple "organisms" in the center
-    # They have max energy and randomized neural weights to see how they evolve/diffuse!
-    cx, cy = W_GRID // 2, H_GRID // 2
-    s = 5
-    world[0, 1, cy-s:cy+s, cx-s:cx+s] = 1.0 # Max Energy
-    
-    # Give the organisms completely random genetic weights!
-    world[0, CH_STATE:, cy-s:cy+s, cx-s:cx+s] = np.random.randn(CH_WEIGHTS, s*2, s*2) * 2.0
-    
+    world[0, 0] = np.random.rand(H_GRID, W_GRID) * 0.3    # Wild food
     return world
 
-def render_to_surface(world_tensor):
-    """Maps tensor channels to RGB and blits to pygame."""
-    # Squeeze out batch layer: (CH, H, W)
-    t = world_tensor[0]
-    
-    rgb = np.zeros((H_GRID, W_GRID, 3), dtype=np.uint8)
-    
-    # Mapping our CA channels to visual colours!
-    # Red   = Target 0 (Food)
-    # Green = Target 1 (Organism Energy)
-    # Blue  = Target 3 (Pheromones/Memory)
-    r = np.clip(t[0] * 255.0, 0, 255)
-    g = np.clip(t[1] * 255.0, 0, 255)
-    b = np.clip(t[3] * 255.0, 0, 255)
-    
-    rgb[..., 0] = r
-    rgb[..., 1] = g
-    rgb[..., 2] = b
-    
-    # Pygame expects (W, H, C)
-    rgb = np.transpose(rgb, (1, 0, 2))
-    
-    surface = pygame.surfarray.make_surface(rgb)
-    return surface
+def drop_organism(world, gx, gy):
+    """Spawns an organism with fully random brain weights."""
+    world[0, 1, gy, gx] = 1.0 # Max Energy
+    world[0, 2:, gy, gx] = np.random.randn(CH_WEIGHTS) * 4.0 # Random 15 weights
 
-# --- 3. Pygame Loop ---
 def main():
-    pygame.init()
-    screen = pygame.display.set_mode((W_PX, H_PX))
-    pygame.display.set_caption("Beetle Brain - ANE NCA")
-    clock = pygame.time.Clock()
+    headless_ticks = None
+    if len(sys.argv) > 1:
+        try:
+            headless_ticks = int(sys.argv[1])
+        except ValueError:
+            pass
 
-    print("\nLoading CoreML ANE Model...")
+    is_headless = headless_ticks is not None
+
+    if not is_headless:
+        pygame.init()
+        screen = pygame.display.set_mode((W_PX, H_PX))
+        pygame.display.set_caption("Beetle Brain - Discrete ANE")
+        clock = pygame.time.Clock()
+
     model = get_model()
-    
     world = init_world()
     
+    # Spawn 50 starters for a good test
+    for _ in range(50):
+        drop_organism(world, np.random.randint(W_GRID), np.random.randint(H_GRID))
+
+    if is_headless:
+        print(f"\nRunning simulation headless for {headless_ticks} ticks...")
+        t0 = time.time()
+        for i in range(headless_ticks):
+            out = model.predict({"world": world})
+            world = list(out.values())[0]
+            
+            world[0, 0] += np.random.rand(H_GRID, W_GRID) * 0.015
+            world[0, 0] = np.clip(world[0,0], 0.0, 1.0)
+            
+            if i % 100 == 0:
+                pop = (world[0, 1] > 0).sum()
+                print(f"Tick {i:4d} | Population: {pop}")
+        
+        t1 = time.time()
+        fps = headless_ticks / (t1 - t0)
+        pop = (world[0, 1] > 0).sum()
+        print(f"\nFinished. {headless_ticks} ticks in {t1-t0:.2f}s ({fps:.1f} ticks/sec). Final pop: {pop}")
+        return
+
     running = True
-    print("\nSimulation Started! Control+C or close window to end.")
+    print("\nSimulation Started!")
+    print(" - Clicking spawns an organism. They now step exactly without smearing!")
     print(" - Red   = Food")
-    print(" - Green = Organism Energy")
-    print(" - Blue  = Pheromones")
-    print(" -> CLICK to drop new organisms and randomized genetic instructions!")
+    print(" - Green = Organism")
+    print(" - Blue  = Neural Weight [0] (Vision)")
     
     while running:
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            # Click to drop an "energy bomb" + random weights into the sim!
+            if event.type == pygame.QUIT: running = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                x, y = event.pos
-                gx, gy = x // RENDER_SCALE, y // RENDER_SCALE
-                
-                # Drop bounded square of max energy and new random DNA
-                y0, y1 = max(0, gy-2), min(H_GRID, gy+3)
-                x0, x1 = max(0, gx-2), min(W_GRID, gx+3)
-                
-                world[0, 1, y0:y1, x0:x1] = 1.0 # Max Energy
-                dyn_h, dyn_w = y1 - y0, x1 - x0
-                world[0, CH_STATE:, y0:y1, x0:x1] = np.random.randn(CH_WEIGHTS, dyn_h, dyn_w) * 5.0
+                gx = np.clip(event.pos[0] // RENDER_SCALE, 0, W_GRID - 1)
+                gy = np.clip(event.pos[1] // RENDER_SCALE, 0, H_GRID - 1)
+                # Drop an organism with random genes
+                drop_organism(world, gx, gy)
+                # Drop some large food nearby
+                world[0, 0, max(0,gy-2):min(H_GRID,gy+2), max(0,gx-2):min(W_GRID,gx+2)] += 1.0
 
-        # Run ANE simulation tick!
-        out = model.predict({"world_grid": world})
+        # Run strict 1-tick pass on Neural Engine
+        out = model.predict({"world": world})
         world = list(out.values())[0]
         
-        # Extra physics check: Food regenerates globally (done in numpy for fast RNG)
-        world[0, 0] += np.random.rand(H_GRID, W_GRID) * 0.05
-        world = np.clip(world, -1.0, 1.0)
+        # Background physics: global food regeneration bounds
+        world[0, 0] += np.random.rand(H_GRID, W_GRID) * 0.015
+        world[0, 0] = np.clip(world[0,0], 0.0, 1.0)
         
-        # Render Process
-        surf = render_to_surface(world)
+        # Render visual channels
+        t = world[0]
+        rgb = np.zeros((H_GRID, W_GRID, 3), dtype=np.uint8)
+        rgb[..., 0] = np.clip(t[0] * 255.0, 0, 255) # Food
+        rgb[..., 1] = np.clip(t[1] * 255.0, 0, 255) # Energy
+        # Normalise a random floating weight to show visual identity moving!
+        rgb[..., 2] = np.clip((t[2] + 2.0) * 60.0, 0, 255) if t[1].max() > 0 else 0 
+        
+        rgb = np.transpose(rgb, (1, 0, 2))
+        surf = pygame.surfarray.make_surface(rgb)
         surf_scaled = pygame.transform.scale(surf, (W_PX, H_PX))
         
         screen.blit(surf_scaled, (0, 0))
         pygame.display.flip()
         
         clock.tick(60)
-        pygame.display.set_caption(f"Beetle Brain - ANE NCA | {clock.get_fps():.0f} FPS")
+        pygame.display.set_caption(f"Beetle Brain - ANE Discrete Evolution | {clock.get_fps():.0f} FPS")
 
     pygame.quit()
 
