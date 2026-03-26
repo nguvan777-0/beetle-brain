@@ -62,8 +62,11 @@ def build_discrete_nca_model():
     # Simple uniform blur for food sensing
     k_blur = np.ones((1, 1, 3, 3), dtype=np.float32) / 9.0
 
-    @mb.program(input_specs=[mb.TensorSpec(shape=(1, CH_TOTAL, H_GRID, W_GRID))])
-    def nca_step(world):
+    @mb.program(input_specs=[
+        mb.TensorSpec(shape=(1, CH_TOTAL, H_GRID, W_GRID)),
+        mb.TensorSpec(shape=(1, CH_WEIGHTS, H_GRID, W_GRID))
+    ])
+    def nca_step(world, mutation):
         # 1. SLICE WORLD CHANNELS
         food_layer = mb.slice_by_index(x=world, begin=[0,0,0,0], end=[1,1,H_GRID,W_GRID])
         org_layer  = mb.slice_by_index(x=world, begin=[0,1,0,0], end=[1,CH_TOTAL,H_GRID,W_GRID])
@@ -88,17 +91,23 @@ def build_discrete_nca_model():
                 if net is None: net = term
                 else: net = mb.add(x=net, y=term)
                 
-            # Break ties purely deterministically by adding a tiny unique offset to each directional channel
-            tie_breaker = np.float32(out_idx * 0.001)
-            net = mb.add(x=net, y=tie_breaker)
             intent_channels.append(net)
             
+        # 4. CHOOSE ONLY 1 DISCRETE ACTION PER PIXEL (STRICTLY 1-HOT TO PREVENT CLONING)
         intent_scores = mb.concat(values=intent_channels, axis=1) # Shape: (1, 5, H, W)
         
-        # 4. CHOOSE ONLY 1 DISCRETE ACTION PER PIXEL
-        max_score = mb.reduce_max(x=intent_scores, axes=[1], keep_dims=True)
-        is_max = mb.equal(x=intent_scores, y=max_score)
-        intent_1hot = mb.cast(x=is_max, dtype="fp32")   
+        # Use reduce_argmax to strictly break ties and prevent FP16 duplicates!
+        best_idx = mb.reduce_argmax(x=intent_scores, axis=1) # Shape: (1, H, W)
+        best_idx = mb.cast(x=best_idx, dtype="fp32")
+        best_idx_expanded = mb.expand_dims(x=best_idx, axes=[1]) # Shape: (1, 1, H, W)
+        
+        onehot_channels = []
+        for d in range(5):
+            d_val = np.array([[[[d]]]], dtype=np.float32)
+            c = mb.cast(x=mb.equal(x=best_idx_expanded, y=d_val), dtype="fp32")
+            onehot_channels.append(c)
+            
+        intent_1hot = mb.concat(values=onehot_channels, axis=1) # Shape: (1, 5, H, W)
         
         # 5. SHIFT-AND-MASK TO RESOLVE MOVEMENT
         # Mode "circular" creates a Torus geometry: organisms walking off the Right edge
@@ -152,10 +161,43 @@ def build_discrete_nca_model():
         new_energy = mb.clip(x=new_energy, alpha=np.float32(0.0), beta=np.float32(1.0))
         new_food = mb.sub(x=food_layer, y=food_eaten)
         
-        # Final death mask: IF energy <= 0, weights get zeroed perfectly clean!
-        is_alive = mb.cast(x=mb.greater(x=new_energy, y=np.float32(0.0)), dtype="fp32")
-        final_energy = mb.mul(x=new_energy, y=is_alive)
-        final_weights = mb.mul(x=shifted_weights, y=is_alive)
+        # Basic death mask before reproduction
+        is_alive_now = mb.cast(x=mb.greater(x=new_energy, y=np.float32(0.0)), dtype="fp32")
+        base_energy = mb.mul(x=new_energy, y=is_alive_now)
+        base_weights = mb.mul(x=shifted_weights, y=is_alive_now)
+
+        # 7. MITOSIS (Reproduction & Mutation)
+        # Parent decides to reproduce if energy > 0.8
+        can_reproduce = mb.cast(x=mb.greater(x=base_energy, y=np.float32(0.8)), dtype="fp32")
+        
+        # Parent loses half energy if reproducing
+        cost = mb.mul(x=base_energy, y=mb.mul(x=can_reproduce, y=np.float32(0.5)))
+        parent_energy = mb.sub(x=base_energy, y=cost)
+        
+        # Offspring payload: gets the cost energy, parent's weights + random mutation noise
+        mutated_weights = mb.add(x=base_weights, y=mutation)
+        offspring_w_send = mb.mul(x=mutated_weights, y=can_reproduce)
+        offspring_e_send = cost
+        
+        # Shift offspring to the East! (Kernel 4 is k_pull_E which pulls from West, meaning moving East)
+        offspring_org_send = mb.concat(values=[offspring_e_send, offspring_w_send], axis=1)
+        pad_offspring = mb_circular_pad(offspring_org_send)
+        inbound_offspring = mb.conv(x=pad_offspring, weight=pull_k_org[4], pad_type="valid", groups=CH_ORG)
+        
+        # Offspring only survives if it lands on a cell that parent_energy currently evaluates as empty
+        is_empty = mb.cast(x=mb.equal(x=parent_energy, y=np.float32(0.0)), dtype="fp32")
+        landed_offspring = mb.mul(x=inbound_offspring, y=is_empty)
+        
+        landed_e = mb.slice_by_index(x=landed_offspring, begin=[0,0,0,0], end=[1,1,H_GRID,W_GRID])
+        landed_w = mb.slice_by_index(x=landed_offspring, begin=[0,1,0,0], end=[1,CH_ORG,H_GRID,W_GRID])
+        
+        # Combine parent and landed offspring
+        final_energy = mb.add(x=parent_energy, y=landed_e)
+        
+        # Ensure parent weights are strictly zeroed if dead
+        parent_alive = mb.cast(x=mb.greater(x=parent_energy, y=np.float32(0.0)), dtype="fp32")
+        kept_w = mb.mul(x=base_weights, y=parent_alive)
+        final_weights = mb.add(x=kept_w, y=landed_w)
         
         # Reconstruct exactly matching channels
         next_org = mb.concat(values=[final_energy, final_weights], axis=1)
@@ -215,13 +257,14 @@ def main():
         print(f"\nRunning simulation headless for {headless_ticks} ticks...")
         t0 = time.time()
         for i in range(headless_ticks):
-            out = model.predict({"world": world})
+            mutation = (np.random.randn(1, CH_WEIGHTS, H_GRID, W_GRID) * 0.1).astype(np.float32)
+            out = model.predict({"world": world, "mutation": mutation})
             world = list(out.values())[0]
             
             world[0, 0] += np.random.rand(H_GRID, W_GRID) * 0.015
             world[0, 0] = np.clip(world[0,0], 0.0, 1.0)
             
-            if i % 100 == 0:
+            if True:
                 pop = (world[0, 1] > 0).sum()
                 print(f"Tick {i:4d} | Population: {pop}")
         
@@ -250,7 +293,8 @@ def main():
                 world[0, 0, max(0,gy-2):min(H_GRID,gy+2), max(0,gx-2):min(W_GRID,gx+2)] += 1.0
 
         # Run strict 1-tick pass on Neural Engine
-        out = model.predict({"world": world})
+        mutation = (np.random.randn(1, CH_WEIGHTS, H_GRID, W_GRID) * 0.1).astype(np.float32)
+        out = model.predict({"world": world, "mutation": mutation})
         world = list(out.values())[0]
         
         # Background physics: global food regeneration bounds
