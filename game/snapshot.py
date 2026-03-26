@@ -1,4 +1,5 @@
 """Save and load world snapshots to/from disk."""
+import json
 import os
 import numpy as np
 from sim.config import N_HIDDEN, N_INPUTS, N_OUTPUTS
@@ -9,12 +10,25 @@ from sim import phylo
 SNAPSHOT_PATH = "snapshot.npz"
 
 
-def save_snapshot(world, tick, history, hall_fame):
+def save_snapshot(world, tick, history, hall_fame, stats=None):
     pop      = world['pop']
     food     = world['food']
     vents    = world['vents']
     hist_arr = np.array(history, dtype=np.float32) if history else np.empty((0, 7), dtype=np.float32)
     phylo_state = world['phylo']
+    extra = {}
+    if stats is not None:
+        payload = {
+            'samples':          stats.samples,
+            'hall_fame':        stats.hall_fame,
+            'run_meta':         stats.run_meta,
+            '_lineage_series':  stats._lineage_series,
+            '_lineage_hues':    stats._lineage_hues,
+            '_lineage_first_tick': stats._lineage_first_tick,
+            '_lineage_parent_map': stats._lineage_parent_map,
+            '_tick_start':      stats._tick_start,
+        }
+        extra['stats_json'] = np.frombuffer(json.dumps(payload).encode(), dtype=np.uint8)
     np.savez_compressed(SNAPSHOT_PATH,
         x=pop['x'], y=pop['y'], angle=pop['angle'], energy=pop['energy'],
         W_body=pop['W_body'], W1=pop['W1'], W2=pop['W2'], Wh=pop['Wh'], b1=pop['b1'], b2=pop['b2'],
@@ -26,7 +40,8 @@ def save_snapshot(world, tick, history, hall_fame):
         phylo_parent=phylo_state['parent'],
         phylo_hue=phylo_state['hue'],
         phylo_next_id=np.array([phylo_state['next_id']], dtype=np.int32),
-        seed=np.array([world.get('seed', 0)], dtype=np.int64))
+        seed=np.array([world.get('seed', 0)], dtype=np.int64),
+        **extra)
     print(f"[saved] {len(pop['x'])} organisms → {SNAPSHOT_PATH}  (tick {tick})")
 
 
@@ -40,7 +55,7 @@ def _migrate_w1(w1):
 
 def load_snapshot(rng):
     if not os.path.exists(SNAPSHOT_PATH):
-        return None, 0, [], []
+        return None, 0, [], [], None
     d      = np.load(SNAPSHOT_PATH, allow_pickle=True)
     W_body = d['W_body'].astype(np.float32)
     t      = decode(W_body)
@@ -83,5 +98,18 @@ def load_snapshot(rng):
     world       = {'pop': pop, 'food': d['food'].astype(np.float32),
                    'vents': vents, 'phylo': phylo_state, 'seed': seed}
     history     = [tuple(row) for row in d['hist']] if d['hist'].ndim == 2 and len(d['hist']) else []
+    stats = None
+    if 'stats_json' in d:
+        from sim.stats import StatsCollector
+        payload = json.loads(d['stats_json'].tobytes().decode())
+        stats = StatsCollector()
+        stats.samples              = payload['samples']
+        stats.hall_fame            = payload['hall_fame']
+        stats.run_meta             = payload['run_meta']
+        stats._lineage_series      = {int(k): v for k, v in payload['_lineage_series'].items()}
+        stats._lineage_hues        = {int(k): v for k, v in payload['_lineage_hues'].items()}
+        stats._lineage_first_tick  = {int(k): v for k, v in payload['_lineage_first_tick'].items()}
+        stats._lineage_parent_map  = {int(k): v for k, v in payload['_lineage_parent_map'].items()}
+        stats._tick_start          = payload['_tick_start']
     print(f"[loaded] {len(pop['x'])} organisms ← {SNAPSHOT_PATH}  (tick {int(d['tick'][0])}, seed {seed})")
-    return world, int(d['tick'][0]), history, []
+    return world, int(d['tick'][0]), history, [], stats

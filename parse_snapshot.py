@@ -90,7 +90,15 @@ for label, idx, lo, hi in TRAITS:
 active_neurons = (s[:, 18] * N_HIDDEN).astype(int)
 n_rays         = (s[:, 19] * (N_RAYS + 1)).astype(int)
 
-# --- history ---
+# --- stats (rich 500-tick samples) ---
+
+import json as _json
+samples = None
+if 'stats_json' in d:
+    payload = _json.loads(d['stats_json'].tobytes().decode())
+    samples = payload.get('samples', [])
+
+# --- history (30-tick fallback) ---
 
 hist = d["hist"]  # (T, 7): tick, pop, max_gen, mean_speed, mean_fov, mean_size, mean_mutation_rate
 H = {
@@ -135,8 +143,8 @@ for label, idx, lo, hi in TRAITS:
     vals = decoded[label]
     m    = vals.mean()
     unit = "°" if label == "fov" else ""
-    print(f"  {label:<18}  {m:>7.2f}  {vals.min():>7.2f}  {vals.max():>7.2f}"
-          f"  {pct(m,lo,hi):>6.0f}%{unit}")
+    print(f"  {label+unit:<18}  {m:>7.2f}  {vals.min():>7.2f}  {vals.max():>7.2f}"
+          f"  {pct(m,lo,hi):>6.0f}%")
 
 an_mean = active_neurons.mean()
 nr_mean = n_rays.mean()
@@ -152,7 +160,77 @@ b_col  = (40 + s[:, 6] * 215).mean()
 print(f"\n  mean color  r={r_col:.0f}  g={g_col:.0f}  b={b_col:.0f}")
 
 # ── time series ────────────────────────────────────────────────
-if T > 1:
+if samples and len(samples) > 1:
+    # rich path: use StatsCollector samples (500-tick, 20+ traits)
+    sticks = np.array([s['tick'] for s in samples])
+    smid   = len(samples) // 2
+    t0s, tms, t1s = int(sticks[0]), int(sticks[smid]), int(sticks[-1])
+
+    print(f"\n{'─'*60}")
+    print(f"  trajectory  (tick {t0s:,} → {tms:,} → {t1s:,})  [500-tick samples]")
+    print(f"{'─'*60}")
+
+    def _col(key):
+        return np.array([s[key] for s in samples])
+
+    rows = [
+        ("pop",          _col('pop'),              None, None),
+        ("max_gen",      _col('max_gen'),           None, None),
+        ("size",         _col('size_mean'),         t["size_min"], t["size_max"]),
+        ("speed",        _col('speed_mean'),        t["speed_min"], t["speed_max"]),
+        ("fov°",         _col('fov_mean_deg'),      0, 162),
+        ("pred_ratio",   _col('pred_ratio_mean'),   e["pred_ratio_min"], e["pred_ratio_max"]),
+        ("mut_rate",     _col('mutation_mean'),     ev["mutation_rate_min"], ev["mutation_rate_max"]),
+        ("n_rays",       _col('n_rays_mean'),       0, N_RAYS),
+        ("active_neur",  _col('active_neurons_mean'), 0, N_HIDDEN),
+    ]
+
+    for label, series, lo, hi in rows:
+        v0, vm, v1 = series[0], series[smid], series[-1]
+        spark = sparkline(series)
+        print(f"  {label:<12}  {v0:>6.1f} → {vm:>6.1f} → {v1:>6.1f}  {spark}")
+
+    # drain breakdown
+    print(f"\n  drain / tick (mean at end)")
+    for key, label in [
+        ('drain_kleiber', 'kleiber'),
+        ('drain_speed',   'speed'),
+        ('drain_size',    'size'),
+        ('drain_sensing', 'sensing'),
+        ('drain_brain',   'brain'),
+    ]:
+        if key in samples[-1]:
+            series = _col(key)
+            print(f"    {label:<10}  {series[-1]:>7.4f}  {sparkline(series)}")
+
+    # key moments
+    size_series = _col('size_mean')
+    pop_series  = _col('pop')
+    print(f"\n  key moments")
+
+    size_80 = find_crossings(size_series, sticks,
+                             t["size_min"] + 0.8 * (t["size_max"] - t["size_min"]))
+    if size_80:
+        print(f"    tick {size_80:>6,}  size crossed 80% of range")
+
+    size_90 = find_crossings(size_series, sticks,
+                             t["size_min"] + 0.9 * (t["size_max"] - t["size_min"]))
+    if size_90:
+        print(f"    tick {size_90:>6,}  size crossed 90% — ceiling locked")
+
+    pop_peak = int(sticks[np.argmax(pop_series)])
+    print(f"    tick {pop_peak:>6,}  population peak ({int(pop_series.max())} wights)")
+
+    if born_at > 0:
+        print(f"    tick {born_at:>6,}  oldest living wight born")
+
+    size_diff = np.abs(np.diff(size_series))
+    fastest_i = np.argmax(size_diff)
+    fastest_t = int(sticks[fastest_i])
+    print(f"    tick {fastest_t:>6,}  fastest size change ({size_series[fastest_i]:.2f}→{size_series[fastest_i+1]:.2f})")
+
+elif T > 1:
+    # fallback: hist (30-tick, 6 traits)
     t0, tm, t1 = int(H["tick"][0]), int(H["tick"][mid]), int(H["tick"][-1])
 
     print(f"\n{'─'*60}")
@@ -192,7 +270,6 @@ if T > 1:
     if born_at > 0:
         print(f"    tick {born_at:>6,}  oldest living wight born")
 
-    # rate of change — where did size move fastest
     size_diff = np.abs(np.diff(H["size"]))
     fastest_i = np.argmax(size_diff)
     fastest_t = int(H["tick"][fastest_i])
