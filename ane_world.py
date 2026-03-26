@@ -28,11 +28,30 @@ MODEL_PATH = "build/ane_nca_world.mlpackage"
 # To process movement, every pixel "pulls" the state of agents wanting to enter it.
 def create_pull_kernels():
     k_stay = np.zeros((1, 1, 3, 3), dtype=np.float32); k_stay[0,0,1,1] = 1.0     
-    k_pull_S = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_S[0,0,2,1] = 1.0 
-    k_pull_N = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_N[0,0,0,1] = 1.0 
-    k_pull_W = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_W[0,0,1,0] = 1.0 
-    k_pull_E = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_E[0,0,1,2] = 1.0 
+    k_pull_S = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_S[0,0,0,1] = 1.0 
+    k_pull_N = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_N[0,0,2,1] = 1.0 
+    k_pull_W = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_W[0,0,1,2] = 1.0 
+    k_pull_E = np.zeros((1, 1, 3, 3), dtype=np.float32); k_pull_E[0,0,1,0] = 1.0 
     return [k_stay, k_pull_S, k_pull_N, k_pull_W, k_pull_E]
+
+def mb_circular_pad(x):
+    """
+    Manually pads a tensor (1, C, H, W) circularly by 1 pixel using ANE-friendly slice and concat.
+    """
+    # Pad Width (axis 3)
+    left_pad = mb.slice_by_index(x=x, begin=[0,0,0,W_GRID-1], end=[1,0,H_GRID,W_GRID], 
+                                 begin_mask=[True,True,True,False], end_mask=[True,True,True,False])
+    right_pad = mb.slice_by_index(x=x, begin=[0,0,0,0], end=[1,0,H_GRID,1], 
+                                  begin_mask=[True,True,True,False], end_mask=[True,True,True,False])
+    padded_w = mb.concat(values=[left_pad, x, right_pad], axis=3)
+
+    # Pad Height (axis 2) Note: padded_w is now W_GRID+2
+    top_pad = mb.slice_by_index(x=padded_w, begin=[0,0,H_GRID-1,0], end=[1,0,H_GRID,0], 
+                                begin_mask=[True,True,False,True], end_mask=[True,True,False,True])
+    bottom_pad = mb.slice_by_index(x=padded_w, begin=[0,0,0,0], end=[1,0,1,0], 
+                                   begin_mask=[True,True,False,True], end_mask=[True,True,False,True])
+    
+    return mb.concat(values=[top_pad, padded_w, bottom_pad], axis=2)
 
 def build_discrete_nca_model():
     """Builds a discrete Shift-and-Mask agent simulator on the Apple Neural Engine."""
@@ -52,7 +71,8 @@ def build_discrete_nca_model():
         weights    = mb.slice_by_index(x=org_layer, begin=[0,1,0,0], end=[1,CH_ORG,H_GRID,W_GRID])
         
         # 2. SENSING
-        pad_food = mb.pad(x=food_layer, pad=[0, 0, 0, 0, 1, 1, 1, 1], mode="constant", constant_val=np.float32(0.0))
+        # Use our manual Torus wrap using slice/concat so Core ML compiles happily
+        pad_food = mb_circular_pad(food_layer)
         blur_food = mb.conv(x=pad_food, weight=k_blur, pad_type="valid")
         senses = [food_layer, blur_food, energy] # 3 Inputs to the neural net
         
@@ -81,8 +101,10 @@ def build_discrete_nca_model():
         intent_1hot = mb.cast(x=is_max, dtype="fp32")   
         
         # 5. SHIFT-AND-MASK TO RESOLVE MOVEMENT
-        pad_org = mb.pad(x=org_layer, pad=[0,0,0,0,1,1,1,1], mode="constant", constant_val=np.float32(0.0))
-        pad_int = mb.pad(x=intent_1hot, pad=[0,0,0,0,1,1,1,1], mode="constant", constant_val=np.float32(0.0))
+        # Mode "circular" creates a Torus geometry: organisms walking off the Right edge
+        # are pulled into the Left edge perfectly seamlessly.
+        pad_org = mb_circular_pad(org_layer)
+        pad_int = mb_circular_pad(intent_1hot)
         
         cands_org = []
         cands_valid = []
