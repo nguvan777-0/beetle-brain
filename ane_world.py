@@ -260,10 +260,15 @@ def main():
         # Render visual channels
         t = world[0]
         rgb = np.zeros((H_GRID, W_GRID, 3), dtype=np.uint8)
-        rgb[..., 0] = np.clip(t[0] * 255.0, 0, 255) # Food
-        rgb[..., 1] = np.clip(t[1] * 255.0, 0, 255) # Energy
-        # Normalise a random floating weight to show visual identity moving!
-        rgb[..., 2] = np.clip((t[2] + 2.0) * 60.0, 0, 255) if t[1].max() > 0 else 0 
+        
+        # Dim green for food so it looks like background algae
+        rgb[..., 1] = np.clip(t[0] * 100.0, 0, 255) 
+        
+        org_mask = t[1] > 0
+        # Draw organisms
+        rgb[org_mask, 0] = np.clip(t[1][org_mask] * 255.0, 80, 255) # Red base from energy
+        rgb[org_mask, 1] = np.clip(t[1][org_mask] * 255.0, 80, 255) # Green base from energy
+        rgb[org_mask, 2] = np.clip((t[2][org_mask] + 2.0) * 60.0, 0, 255) # Blue varies by genes
         
         rgb = np.transpose(rgb, (1, 0, 2))
         surf = pygame.surfarray.make_surface(rgb)
