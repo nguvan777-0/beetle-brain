@@ -37,7 +37,7 @@ def _pca_proj(W_body):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def main():
+def main(new=False, seed=None, fork=None):
     init_ane()
 
     pygame.init()
@@ -48,11 +48,11 @@ def main():
     font_sm = pygame.font.SysFont("monospace", 10)
     font_lg = pygame.font.SysFont("monospace", 14)
 
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(fork)
 
     world, tick, history, hall_fame, _saved_stats = load_snapshot(rng)
-    if world is None or len(world['pop']['x']) == 0:
-        world     = new_world()
+    if new or seed is not None or world is None or len(world['pop']['x']) == 0:
+        world     = new_world(seed=seed)
         tick      = 0
         history   = []
         hall_fame = []
