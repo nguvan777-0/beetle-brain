@@ -75,8 +75,8 @@ def _key_label_x_font():
 _LEGEND_N = 9
 _LEGEND_COLORS = [
     (
-        tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / (_LEGEND_N - 1) * 0.75, 0.80, 0.52)),
-        tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / (_LEGEND_N - 1) * 0.75, 0.65, 0.30)),
+        tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / (_LEGEND_N - 1) * 0.75, 1.00, 1.00)),
+        tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / (_LEGEND_N - 1) * 0.75, 0.65, 0.55)),
     )
     for i in range(_LEGEND_N)
 ]
