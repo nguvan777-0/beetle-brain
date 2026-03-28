@@ -7,7 +7,7 @@ Neuroevolution sim where the organism is its weights, accelerated via CoreML on 
 - **Emergent**: predator/prey dimorphism, camouflage arms races, lineage divergence, and spatial memory — nothing encodes these, they appear.
 - **Environment**: `SPACE` toggles day/night — night cuts all sunlight from the land biome, shifting selection pressure toward water-side and stored-energy strategies.
 
-![beetle-brain](https://github.com/nguvan777-0/beetle-brain/releases/download/screenshots/screenshot_f8fa4f5_225919_0001894.png)
+![beetle-brain](https://github.com/nguvan777-0/beetle-brain/releases/download/screenshots/screenshot_de6d9f4_6cff356b_0003148.png)
 
 ## Run with the sun
 
