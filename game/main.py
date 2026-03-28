@@ -252,9 +252,10 @@ class SimRunner(threading.Thread):
         init_ane()   # must be called on the thread that will use CoreML
         self._t_start = time.time()
 
-        tps_window_t = time.time()
-        tps_window_n = 0
-        TPS_WINDOW   = 0.5   # seconds
+        tps_window_t  = time.time()
+        tps_window_n  = 0
+        TPS_WINDOW    = 0.5   # seconds
+        last_publish  = 0.0   # used by MAX to rate-limit publish to ~60/s
 
         while True:
             if not self._drain_cmds():
@@ -274,13 +275,10 @@ class SimRunner(threading.Thread):
             t0    = time.time()
 
             if speed is None:
-                # MAX: run as many ticks as fit in one frame budget
-                ticks_done = 0
-                while time.time() - t0 < FRAME_S:
-                    self._world = sim_tick(self._world, self._rng)
-                    ticks_done += 1
-                    if len(self._world['pop']['x']) == 0:
-                        break
+                # MAX: one tick per outer loop iteration, no sleep.
+                # Publish is rate-limited below so we don't copy arrays every tick.
+                self._world = sim_tick(self._world, self._rng)
+                ticks_done  = 1
             elif speed == 0.5:
                 self._world = sim_tick(self._world, self._rng)
                 ticks_done  = 1
@@ -303,18 +301,16 @@ class SimRunner(threading.Thread):
                 tps_window_n     = 0
                 tps_window_t     = now
 
-            self._publish()
-
-            # Throttle / yield
-            elapsed = time.time() - t0
+            # Publish + throttle
             if speed is None:
-                time.sleep(0)            # yield to GIL so render thread runs
-            elif speed == 0.5:
-                remaining = (1.0 / 30) - elapsed
-                if remaining > 0:
-                    time.sleep(remaining)
+                # MAX: publish at most 60×/s; never sleep
+                if now - last_publish >= FRAME_S:
+                    self._publish()
+                    last_publish = now
             else:
-                remaining = FRAME_S - elapsed
+                self._publish()
+                elapsed   = time.time() - t0
+                remaining = ((1.0 / 30) if speed == 0.5 else FRAME_S) - elapsed
                 if remaining > 0:
                     time.sleep(remaining)
 
