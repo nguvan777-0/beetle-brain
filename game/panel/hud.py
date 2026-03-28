@@ -628,7 +628,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     surf.blit(title_surf, (px + 6, y))
 
     if seed is not None:
-        COLOR  = (80, 95, 130)
+        COLOR  = (160, 175, 220)
         _steps = (font_lg, font, font_sm)
         def _sf_smaller(f):
             return _steps[min(_steps.index(f) + 1, len(_steps) - 1)]
@@ -660,8 +660,8 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                                sub_y + sf.get_height() - lf.get_height()))
     else:
         sub_y     = y + (row_h - font_lg.get_height()) // 2
-        fnum_surf = _render_text(f"{fps:.0f}", font_lg, (80, 95, 130))
-        flbl_surf = _render_text("fps", font, (80, 95, 130))
+        fnum_surf = _render_text(f"{fps:.0f}", font_lg, (160, 175, 220))
+        flbl_surf = _render_text("fps", font, (160, 175, 220))
         fps_x     = px + PANEL_W - 6 - fnum_surf.get_width() - flbl_surf.get_width()
         surf.blit(fnum_surf, (fps_x, sub_y))
         surf.blit(flbl_surf, (fps_x + fnum_surf.get_width(),
