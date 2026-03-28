@@ -104,17 +104,17 @@ Everything is in `config.toml` — edit it, restart the sim. Sections: `[world]`
 
 ## Performance
 
-Measured on Apple Silicon (Mac mini M4), headless
+Measured on Apple Silicon (Mac mini M4), headless, 5s per phase
 
-| `--backend` | hardware | compile | start (pop~14) | grown (pop~38) | max-pop (4096) |
-|-------------|----------|---------|----------------|----------------|-------------|
-| `ane`       | CoreML → ANE         | ~33s  | ~1,250 t/s | ~714 t/s | failed |
-| `gpu` ✓     | CoreML → GPU         | ~1.6s | ~1,250 t/s | ~714 t/s | ~17 t/s |
-| `cpu`       | CoreML → CPU         | ~1.5s | ~1,250 t/s | ~714 t/s | ~11 t/s |
-| `all`       | CoreML → CPU+GPU+ANE | ~17s  | ~1,000 t/s | ~714 t/s | ~16 t/s |
-| `numpy`     | numpy (no CoreML)    | ~1.6s | ~1,250 t/s | ~714 t/s | ~17 t/s |
+| `--backend` | hardware | compile | start (pop~14) | grown (pop~59) | max-pop (4096) |
+|-------------|----------|---------|----------------|----------------|----------------|
+| `ane`       | CoreML → ANE         | ~33s  | ~1,250 t/s | ~624 t/s | failed |
+| `gpu` ✓     | CoreML → GPU         | ~1.6s | ~1,000 t/s | ~625 t/s | ~41 t/s |
+| `cpu`       | CoreML → CPU         | ~1.5s | ~1,000 t/s | ~555 t/s | ~18 t/s |
+| `all`       | CoreML → CPU+GPU+ANE | ~17s  | ~1,000 t/s | ~624 t/s | ~35 t/s |
+| `numpy`     | numpy (no CoreML)    | ~1.7s | ~1,000 t/s | ~624 t/s | ~41 t/s |
 
-At small populations throughput is bounded by CoreML dispatch latency (~2 dispatches per tick), not brain computation — all backends converge around 700–1,250 t/s. Backend differences only emerge at max-pop where brain computation dominates: `gpu` and `numpy` tie at ~17 t/s, `cpu` falls to ~11 t/s, `all` sits at ~16 t/s.
+At small populations throughput is bounded by CoreML dispatch latency (~2 dispatches per tick), not brain computation — all backends converge around 1,000–1,250 t/s. Backend differences emerge at max-pop where brain computation dominates: `gpu` and `numpy` tie at ~41 t/s, `all` sits at ~35 t/s, `cpu` falls to ~18 t/s.
 
 `gpu` is the default — fast compile, consistent across all population sizes. `ane` compiles the 4096-batch model but exceeds ANE on-chip memory at inference; it is fast at mid-range populations but the max-pop case is unsupported. `all` routes across all hardware simultaneously but scheduling overhead makes it slower than `gpu` alone.
 
