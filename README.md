@@ -148,10 +148,10 @@ The `.txt` covers the same run — trait means at exit, sparkline trajectories, 
 
 ## Performance
 
-Measured on Apple Silicon (Mac mini M4), headless, compilation time excluded.
+Measured on Apple Silicon (Mac mini M4), headless. Tick rates exclude compile time.
 
-| `--backend` | hardware | load | start (pop~16) | mature (pop~1400) | maxpop (4096) |
-|-------------|----------|------|---------------|-------------------|---------------|
+| `--backend` | hardware | compile | start (pop~16) | mature (pop~1400) | maxpop (4096) |
+|-------------|----------|---------|---------------|-------------------|---------------|
 | `ane`       | CoreML → ANE      | ~30s  | ~1000 t/s | **~192 t/s** | — |
 | `gpu` ✓     | CoreML → GPU      | ~0.4s | ~1000 t/s | ~47 t/s | ~24 t/s |
 | `numpy`     | numpy (no CoreML) | ~0.4s | ~1000 t/s | ~45 t/s | ~23 t/s |

@@ -205,7 +205,7 @@ max_hdr    = f"maxpop ({MAX_POP})"
 sep = "─" * (col_w + 10 + col_tps * 3 + 8)
 print()
 print(sep)
-print(f"{'backend':<{col_w}}  {'load':>8}  {start_hdr:>{col_tps}}  {mature_hdr:>{col_tps}}  {max_hdr:>{col_tps}}")
+print(f"{'backend':<{col_w}}  {'compile':>8}  {start_hdr:>{col_tps}}  {mature_hdr:>{col_tps}}  {max_hdr:>{col_tps}}")
 print(sep)
 for (label, load_str, load_s,
      start_tps, start_pop,
