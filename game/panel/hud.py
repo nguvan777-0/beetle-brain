@@ -21,12 +21,26 @@ from game.panel.sparkline import draw_sparkline
 PANEL_W = 320
 
 _font_title: object = None   # lazily initialised; pygame not ready at import time
+_font_key_label: object = None
+_font_key_label_x: object = None
 
 def _title_font():
     global _font_title
     if _font_title is None:
         _font_title = pygame.font.SysFont("monospace", 16, bold=True)
     return _font_title
+
+def _key_label_font():
+    global _font_key_label
+    if _font_key_label is None:
+        _font_key_label = pygame.font.SysFont("monospace", 17)
+    return _font_key_label
+
+def _key_label_x_font():
+    global _font_key_label_x
+    if _font_key_label_x is None:
+        _font_key_label_x = pygame.font.SysFont("monospace", 15)
+    return _font_key_label_x
 
 # Rainbow colors for the legend keys: sp · 1x · 2x · 3x · 4x · 5x · s · r
 # Red (sp) → violet (r:rst), precomputed once at import time.
@@ -90,9 +104,44 @@ from functools import lru_cache
 
 @lru_cache(maxsize=1024)
 def _render_text(text: str, font, color: tuple):
-    return font.render(str(text), True, color)
+    text_str = str(text)
+    
+    if text_str == "__ICON_PLAY__":
+        sz = font.get_height()
+        res = pygame.Surface((sz, sz), pygame.SRCALPHA)
+        # Smooth triangle using polygon
+        pts = [(sz*0.25, sz*0.15), (sz*0.85, sz*0.5), (sz*0.25, sz*0.85)]
+        pygame.draw.polygon(res, color, pts)
+        return res
+        
+    if text_str == "__ICON_PAUSE__":
+        sz = font.get_height()
+        res = pygame.Surface((sz, sz), pygame.SRCALPHA)
+        w = max(2, int(sz * 0.2))
+        pygame.draw.rect(res, color, (sz*0.2, sz*0.15, w, sz*0.7))
+        pygame.draw.rect(res, color, (sz*0.6, sz*0.15, w, sz*0.7))
+        return res
+        
+    # Automatically style the "x" part of speed labels (like "1x", "5x", "100x")
+    if text_str.endswith("x") and len(text_str) > 1 and text_str not in ("fps", "MAX"):
+        num_str = text_str[:-1]
+        s1 = font.render(num_str, True, color)
+        fx = _key_label_x_font()
+        sx = fx.render("x", True, color)
+        
+        w = s1.get_width() + sx.get_width()
+        h = max(s1.get_height(), sx.get_height())
+        res = pygame.Surface((w, h), pygame.SRCALPHA)
+        
+        # Baseline render: larger number first, smaller 'x' resting slightly above the absolute bottom
+        res.blit(s1, (0, h - s1.get_height()))
+        res.blit(sx, (s1.get_width(), h - sx.get_height() - 1))
+        return res
 
-_KEYCAP_SHELF      = 4
+    return font.render(text_str, True, color)
+
+_KEYCAP_SHELF      = 2
+_KEYCAP_MIN_W      = 22   # minimum face width so single-letter keys look like real keycaps
 _KEYCAP_FACE_COLOR = (75, 86, 126)
 _KEYCAP_FACE_PRESS = (50, 58, 88)
 _KEYCAP_RIM        = (92, 106, 150)
@@ -109,57 +158,60 @@ def _keycap_width(key_name, f_key, label=None, f_label=None, face_w=None):
     S     = _KEYCAP_SHELF
     KPX   = 7
     key_s = _render_text(key_name, f_key, _KEYCAP_KEY_COLOR)
-    fw    = face_w if face_w is not None else key_s.get_width() + KPX * 2
+    fw    = max(face_w if face_w is not None else key_s.get_width() + KPX * 2, _KEYCAP_MIN_W)
     if label and f_label:
         lbl_s = _render_text(label, f_label, _KEYCAP_LBL_COLOR)
-        return fw + S + 6 + lbl_s.get_width()
+        return fw + S + lbl_s.get_width()
     return fw + S
 
 
 def _draw_keycap(surf, lx, top_y, key_name, pressed, f_key,
                  label=None, f_label=None, label_color=None, face_w=None):
     """Keyboard keycap: shadow bottom-right, face slides into it when pressed.
-    key_name inside the key; optional label drawn to the right.
-    Returns total width consumed (key + shelf + gap + label)."""
-    S     = _KEYCAP_SHELF
+    Label sits to the right of the key, drawn after (in front).
+    Returns total width consumed."""
+    S        = _KEYCAP_SHELF
     KPX, KPY = 7, 3
-    key_s = _render_text(key_name, f_key, _KEYCAP_KEY_COLOR)
-    fw    = face_w if face_w is not None else key_s.get_width() + KPX * 2
-    fh    = key_s.get_height() + KPY * 2
+    key_s    = _render_text(key_name, f_key, _KEYCAP_KEY_COLOR)
+    fw       = max(face_w if face_w is not None else key_s.get_width() + KPX * 2, _KEYCAP_MIN_W)
+    fh       = key_s.get_height() + KPY * 2
+    fx       = lx + (S if pressed else 0)
+    fy       = top_y + (S if pressed else 0)
 
-    # shadow: fixed at bottom-right — represents the key's physical depth
+    lbl_s = _render_text(label, f_label, label_color or _KEYCAP_LBL_COLOR) if label and f_label else None
+    # Center text vertically based strictly on the unpressed button face, ignoring shadow shelf
+    lbl_y = top_y + (fh - lbl_s.get_height()) // 2 if lbl_s else 0
+
+    # key body: shadow → face → rim → highlight → key name
     pygame.draw.rect(surf, _KEYCAP_SHADOW,
                      pygame.Rect(lx + S, top_y + S, fw, fh), border_radius=4)
-
-    # face: proud at top-left unpressed, drops into shadow when pressed
-    fx = lx + (S if pressed else 0)
-    fy = top_y + (S if pressed else 0)
     pygame.draw.rect(surf, _KEYCAP_FACE_PRESS if pressed else _KEYCAP_FACE_COLOR,
                      pygame.Rect(fx, fy, fw, fh), border_radius=4)
-
-    # rim
     pygame.draw.rect(surf, _KEYCAP_RIM_PRESS if pressed else _KEYCAP_RIM,
                      pygame.Rect(fx, fy, fw, fh), 1, border_radius=4)
-
-    # top-left highlight (light source top-left, shadow bottom-right)
     if not pressed:
-        pygame.draw.line(surf, _KEYCAP_HL1,
-                         (fx + 3, fy + 1), (fx + fw - 4, fy + 1))
-        pygame.draw.line(surf, _KEYCAP_HL2,
-                         (fx + 1, fy + 3), (fx + 1, fy + fh - 4))
-
-    # key name centred on face
+        pygame.draw.line(surf, _KEYCAP_HL1, (fx + 3, fy + 1), (fx + fw - 4, fy + 1))
+        pygame.draw.line(surf, _KEYCAP_HL2, (fx + 1, fy + 3), (fx + 1, fy + fh - 4))
     surf.blit(key_s, (fx + (fw - key_s.get_width()) // 2,
                       fy + (fh - key_s.get_height()) // 2))
 
-    total_w = fw + S
-    if label and f_label:
-        lc    = label_color if label_color else _KEYCAP_LBL_COLOR
-        lbl_s = _render_text(label, f_label, lc)
-        lbl_y = top_y + (fh + S - lbl_s.get_height()) // 2
-        surf.blit(lbl_s, (lx + fw + S + 6, lbl_y))
-        total_w = fw + S + 6 + lbl_s.get_width()
-    return total_w
+    # label drawn after (in front of) the key
+    if lbl_s:
+        lbl_x = lx + fw + S
+        if pressed:
+            # active: z-elevation effect. Text moves purely straight UP to avoid 
+            # sliding under the next button's bounding box that gets drawn next.
+            shadow_s = _render_text(label, f_label, (10, 10, 15))
+            # Shadow cast down and left!
+            surf.blit(shadow_s, (lbl_x - 2, lbl_y + 2))
+            surf.blit(shadow_s, (lbl_x - 1, lbl_y + 1))
+            # The brightly colored text itself moves straight up
+            surf.blit(lbl_s, (lbl_x, lbl_y - 2))
+        else:
+            # inactive: label to the right
+            surf.blit(lbl_s, (lbl_x, lbl_y))
+
+    return fw + S + lbl_s.get_width() if lbl_s else fw + S
 
 
 def _lerp_color(t, lo=(60, 100, 200), mid=(60, 200, 120), hi=(220, 80, 60)):
@@ -460,34 +512,46 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
             _pill(lx, text_y, label, i, active, f)
             lx += w + gap
 
-    _pill_row([
-        ("0:.5x",  1, sim_speed_idx == 0, None),
-        ("1:1x",   2, sim_speed_idx == 1, None),
-        ("2:5x",   3, sim_speed_idx == 2, None),
-        ("3:20x",  4, sim_speed_idx == 3, None),
-        ("4:100x", 5, sim_speed_idx == 4, None),
-        ("5:MAX",  6, sim_speed_idx == 5, None),
-    ], y)
-    y += font.get_height() + 6
+    # row 1: speed keycaps 0-5
+    speed_keys = [
+        ("0", "½x",   1, sim_speed_idx == 0),
+        ("1", "1x",   2, sim_speed_idx == 1),
+        ("2", "5x",   3, sim_speed_idx == 2),
+        ("3", "20x",  4, sim_speed_idx == 3),
+        ("4", "100x", 5, sim_speed_idx == 4),
+        ("5", "MAX",  6, sim_speed_idx == 5),
+    ]
+    row1_top = y - PY2
+    kl_font = _key_label_font()
+    s_widths = [_keycap_width(k, font_sm, label=lbl, f_label=kl_font)
+                for k, lbl, _, _ in speed_keys]
+    s_gap    = (PANEL_W - MARGIN * 2 - sum(s_widths)) / max(len(speed_keys) - 1, 1)
+    lx1      = px + MARGIN
+    for (kname, klabel, ci, active), kw in zip(speed_keys, s_widths):
+        lc = _LEGEND_COLORS[ci][0 if active else 1]
+        _draw_keycap(surf, lx1, row1_top, kname, active, font_sm,
+                     label=klabel, f_label=kl_font, label_color=lc)
+        lx1 += kw + s_gap
+    y += kl_font.get_height() + _KEYCAP_SHELF + PY2 + 6
 
     # row 2: three keycaps distributed across the panel
     row2_top = y - PY2
-    sp_lbl   = "PAUSE" if paused else "PLAY"
+    sp_lbl   = "__ICON_PLAY__" if paused else "__ICON_PAUSE__"
     keys = [
         ("space", paused,       sp_lbl,       48,   0),
         ("s",     snap_active,  "screenshot", None, 7),
         ("r",     rst_active,   "restart",    None, 8),
     ]
-    widths  = [_keycap_width(k, font_sm, label=lbl, f_label=font_lg, face_w=fw)
+    widths  = [_keycap_width(k, font_sm, label=lbl, f_label=kl_font, face_w=fw)
                for k, _, lbl, fw, _ in keys]
     gap     = (PANEL_W - MARGIN * 2 - sum(widths)) / max(len(keys) - 1, 1)
     lx3     = px + MARGIN
     for (kname, kpressed, klabel, kfw, ci), kw in zip(keys, widths):
         lc = _LEGEND_COLORS[ci][0 if kpressed else 1]
         _draw_keycap(surf, lx3, row2_top, kname, kpressed, font_sm,
-                     label=klabel, f_label=font_lg, face_w=kfw, label_color=lc)
+                     label=klabel, f_label=kl_font, face_w=kfw, label_color=lc)
         lx3 += kw + gap
-    y += font_sm.get_height() + _KEYCAP_SHELF + PY2 + 6
+    y += kl_font.get_height() + _KEYCAP_SHELF + PY2 + 6
     sep()
 
     N = len(pop['x'])
