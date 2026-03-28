@@ -241,6 +241,7 @@ class SimRunner(threading.Thread):
     # ── thread entry ──────────────────────────────────────────────────────────
 
     def run(self):
+        init_ane()   # must be called on the thread that will use CoreML
         self._t_start = time.time()
 
         tps_window_t = time.time()
@@ -351,7 +352,6 @@ def _draw_extinction_overlay(surf, font, font_lg, tick):
 def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
     if compute_units != 'numpy':
         os.environ['BEETLE_COMPUTE_UNITS'] = compute_units
-    init_ane()
 
     pygame.init()
     surf    = pygame.display.set_mode((TOTAL_W, sim.HEIGHT))
@@ -440,14 +440,6 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
             clock.tick(FPS)
             continue
 
-        # ── extinction overlay ─────────────────────────────────────────────────
-        if snap.is_extinct:
-            surf.fill((10, 14, 20))
-            _draw_extinction_overlay(surf, font, font_lg, snap.tick)
-            pygame.display.flip()
-            clock.tick(FPS)
-            continue
-
         pop = snap.pop
         if sel_idx is not None and sel_idx >= len(pop['x']):
             sel_idx = None
@@ -476,6 +468,9 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                    snap_active=(now - last_snap_t) < 0.2,
                    rst_active=(now - last_rst_t) < 0.2,
                    fps=clock.get_fps())
+
+        if snap.is_extinct:
+            _draw_extinction_overlay(surf, font, font_lg, snap.tick)
 
         pygame.display.flip()
         clock.tick(FPS)
