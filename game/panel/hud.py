@@ -626,12 +626,40 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     widths  = [_keycap_width(k, font_sm, label=lbl, f_label=kl_font, face_w=fw)
                for k, _, lbl, fw, _ in keys]
     gap     = (PANEL_W - MARGIN * 2 - sum(widths)) / max(len(keys) - 1, 1)
-    lx3     = px + MARGIN
+    lx3          = px + MARGIN
+    frame_icon_c = None   # (cx, cy) of the frame icon, captured during loop
+    frame_canvas  = None  # pygame.Rect of the inner canvas, clipping region
     for (kname, kpressed, klabel, kfw, ci), kw in zip(keys, widths):
         lc = _LEGEND_COLORS[ci][0 if kpressed else 1]
         _draw_keycap(surf, lx3, row2_top, kname, kpressed, font_sm,
                      label=klabel, f_label=kl_font, face_w=kfw, label_color=lc)
+        if klabel == "__ICON_FRAME__":
+            icon_sz = kl_font.get_height()
+            icon_x  = lx3 + kw - icon_sz
+            fh      = font_sm.get_height() + 6    # KPY=3 each side in _draw_keycap
+            icon_y  = row2_top + (fh - icon_sz) // 2
+            px_f    = max(1, int(icon_sz * 0.13))
+            bw_f    = max(2, int(icon_sz * 0.17))
+            frame_icon_c = (icon_x + icon_sz // 2, icon_y + icon_sz // 2)
+            frame_canvas  = pygame.Rect(
+                icon_x + px_f + bw_f,
+                icon_y + bw_f + 1,
+                icon_sz - (px_f + bw_f) * 2,
+                icon_sz - (bw_f + 1) * 2,
+            )
         lx3 += kw + gap
+    # overlay selected wight inside the frame canvas, clipped to stay within
+    if frame_icon_c is not None and sel_idx is not None and sel_idx < len(pop['x']):
+        lid   = int(pop['lineage_id'][sel_idx])
+        lcol  = _LINEAGE_COLORS[lid % len(_LINEAGE_COLORS)]
+        sr, sg, sb = int(pop['r'][sel_idx]), int(pop['g'][sel_idx]), int(pop['b'][sel_idx])
+        max_r = min(frame_canvas.width, frame_canvas.height) // 2
+        wr    = min(max(2, int(pop['size'][sel_idx])), max(1, max_r - 1))
+        old_clip = surf.get_clip()
+        surf.set_clip(frame_canvas)
+        pygame.draw.circle(surf, lcol,         frame_icon_c, wr + 1, 1)
+        pygame.draw.circle(surf, (sr, sg, sb), frame_icon_c, wr)
+        surf.set_clip(old_clip)
     y += kl_font.get_height() + _KEYCAP_SHELF + PY2 + 6
     sep()
 
