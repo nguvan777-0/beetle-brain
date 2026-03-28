@@ -22,6 +22,34 @@ PANEL_W = 320
 
 _font_title: object = None   # lazily initialised; pygame not ready at import time
 _font_key_label: object = None
+_font_arrow:     object = None   # Arial Unicode (or None) for circular arrow glyphs
+
+def _arrow_font(size):
+    """Return a font that can render ↻/↺, or None if unavailable."""
+    global _font_arrow
+    if _font_arrow is not None:
+        return _font_arrow
+    import os
+    candidates = [
+        '/Library/Fonts/Arial Unicode.ttf',          # macOS
+        '/usr/share/fonts/truetype/arialuni.ttf',    # Linux (if installed)
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                f = pygame.font.Font(path, size)
+                # verify the glyph is actually present
+                s = f.render('↻', True, (255, 255, 255))
+                if any(s.get_at((x, y))[3] > 0
+                       for x in range(s.get_width())
+                       for y in range(s.get_height())):
+                    f.set_bold(True)
+                    _font_arrow = f
+                    return _font_arrow
+            except Exception:
+                pass
+    _font_arrow = False   # sentinel: searched, not found
+    return None
 _font_key_label_x: object = None
 
 def _title_font():
@@ -120,6 +148,37 @@ def _render_text(text: str, font, color: tuple):
         w = max(2, int(sz * 0.2))
         pygame.draw.rect(res, color, (sz*0.2, sz*0.15, w, sz*0.7))
         pygame.draw.rect(res, color, (sz*0.6, sz*0.15, w, sz*0.7))
+        return res
+
+    if text_str == "__ICON_RESTART__":
+        import math
+        sz    = font.get_height()
+        af    = _arrow_font(sz)
+        if af:
+            return af.render('↻', True, color)
+        res   = pygame.Surface((sz, sz), pygame.SRCALPHA)
+        color = (90, 210, 110)
+        cx, cy = sz * 0.5, sz * 0.5
+        r   = sz * 0.40
+        lw  = max(1, int(sz * 0.13))
+        ah  = sz * 0.30   # arrowhead arm length
+        # 270° arc, big gap at top-right so chevron has room
+        gap     = math.radians(90)
+        a_start = math.radians(45) + gap / 2    # left edge of gap
+        a_stop  = a_start + math.radians(270)   # 270° sweep
+        pygame.draw.arc(res, color,
+                        (int(cx - r), int(cy - r), int(r * 2), int(r * 2)),
+                        a_start, a_stop, lw)
+        # open V-chevron at a_stop — reads far better than filled triangle at small sizes
+        t        = a_stop
+        tx, ty   = -math.sin(t), -math.cos(t)   # CCW tangent in screen coords
+        px_, py_ = ty, -tx                        # perpendicular
+        ex = cx + r * math.cos(t)
+        ey = cy - r * math.sin(t)
+        wing1 = (ex - tx * ah + px_ * ah * 0.6, ey - ty * ah + py_ * ah * 0.6)
+        wing2 = (ex - tx * ah - px_ * ah * 0.6, ey - ty * ah - py_ * ah * 0.6)
+        pygame.draw.line(res, color, (int(ex), int(ey)), (int(wing1[0]), int(wing1[1])), lw)
+        pygame.draw.line(res, color, (int(ex), int(ey)), (int(wing2[0]), int(wing2[1])), lw)
         return res
 
     if text_str == "__ICON_SUN__":
@@ -621,7 +680,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     keys = [
         ("space", day,           sp_lbl,       48,   0),
         ("s",     snap_active,  "__ICON_FRAME__",  None, 7),
-        ("r",     rst_active,   "restart",    None, 8),
+        ("r",     rst_active,   "__ICON_RESTART__", None, 8),
     ]
     widths  = [_keycap_width(k, font_sm, label=lbl, f_label=kl_font, face_w=fw)
                for k, _, lbl, fw, _ in keys]
