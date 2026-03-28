@@ -113,13 +113,20 @@ def tick(world, rng):
                 food = food[~eaten_food_mask]
 
     # ── predation ────────────────────────────────────────────────────────────
-    killed, prey_gain, pred_idx, prey_idx = predation(pop, idx_grid)
+    from sim.grid.constants import GRID_SCALE, GH, GW, _PR_OFF
+    oy = np.clip((pop['y'] * GRID_SCALE).astype(np.int32), 0, GH - 1)
+    ox = np.clip((pop['x'] * GRID_SCALE).astype(np.int32), 0, GW - 1)
+    row_idx = (oy[:, None, None] + _PR_OFF[None, :, None]) % GH
+    col_idx = (ox[:, None, None] + _PR_OFF[None, None, :]) % GW
+    j_idx   = idx_grid[row_idx, col_idx].reshape(len(pop['x']), -1)
+
+    killed, prey_gain, pred_idx, prey_idx = predation(pop, idx_grid, j_idx)
     pop['energy'] = np.minimum(energy_max, pop['energy'] + prey_gain)
     pop['eaten'] += (prey_gain > 0).astype(np.int32)
 
     # ── horizontal gene transfer ──────────────────────────────────────────────
     eat_hgt(pop, pred_idx, prey_idx, rng)
-    contact_hgt(pop, idx_grid, rng)
+    contact_hgt(pop, j_idx, rng)
 
     # ── death ────────────────────────────────────────────────────────────────
     alive = (pop['energy'] > 0) & (~killed)

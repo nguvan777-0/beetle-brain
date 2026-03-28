@@ -1,15 +1,16 @@
 """Predation: O(N) patch-based kill detection with energy conservation."""
 import numpy as np
 from sim.config import SIZE_MAX, CAMO_BONUS, CAMO_ENABLED
-from sim.grid.constants import GRID_SCALE, GH, GW, PRED_R_PIX, _PR_OFF
+from sim.grid.constants import PRED_R_PIX
 
 
-def predation(pop, idx_grid):
+def predation(pop, idx_grid, j_idx):
     """
     For each wight, sample a (2*PRED_R_PIX+1)² patch of idx_grid to find
     nearby candidates. Kill prey that are smaller and in range.
 
-    Returns (killed mask (N,), prey_gain (N,)).
+    j_idx: (N, patch²) int32 pre-computed by tick — shared with contact_hgt.
+    Returns (killed mask (N,), prey_gain (N,), pred_idx, prey_idx).
     Energy is split among all predators that kill the same prey.
     """
     N = len(pop['x'])
@@ -18,13 +19,6 @@ def predation(pop, idx_grid):
 
     brightness = (pop['r'].astype(np.float32) + pop['g'] + pop['b']) / (3.0 * 255.0)
     detect_r   = pop['size'] + (brightness * CAMO_BONUS if CAMO_ENABLED else 0.0)
-
-    oy = np.clip((pop['y'] * GRID_SCALE).astype(np.int32), 0, GH - 1)
-    ox = np.clip((pop['x'] * GRID_SCALE).astype(np.int32), 0, GW - 1)
-
-    row_idx = (oy[:, None, None] + _PR_OFF[None, :, None]) % GH
-    col_idx = (ox[:, None, None] + _PR_OFF[None, None, :]) % GW
-    j_idx   = idx_grid[row_idx, col_idx].reshape(N, -1)
 
     i_idx  = np.arange(N, dtype=np.int32)[:, None]
     valid  = (j_idx >= 0) & (j_idx != i_idx)

@@ -6,7 +6,7 @@ Crossover: single random cut point across the full concatenated genome
 """
 import numpy as np
 from sim.population.genome import decode
-from sim.grid.constants import GRID_SCALE, GH, GW, PRED_R_PIX, _PR_OFF
+from sim.grid.constants import PRED_R_PIX
 
 
 def _crossover(pop, recipient_idx, donor_idx, rng):
@@ -65,18 +65,14 @@ def eat_hgt(pop, predator_idx, prey_idx, rng):
         _crossover(pop, predator_idx[take], prey_idx[take], rng)
 
 
-def contact_hgt(pop, idx_grid, rng):
-    """HGT via proximity: wights in touching range roll against hgt_contact_rate."""
+def contact_hgt(pop, j_idx, rng):
+    """HGT via proximity: wights in touching range roll against hgt_contact_rate.
+
+    j_idx: (N, patch²) int32 pre-computed by tick — shared with predation.
+    """
     N = len(pop['x'])
     if N <= 1:
         return
-
-    oy = np.clip((pop['y'] * GRID_SCALE).astype(np.int32), 0, GH - 1)
-    ox = np.clip((pop['x'] * GRID_SCALE).astype(np.int32), 0, GW - 1)
-
-    row_idx = (oy[:, None, None] + _PR_OFF[None, :, None]) % GH
-    col_idx = (ox[:, None, None] + _PR_OFF[None, None, :]) % GW
-    j_idx   = idx_grid[row_idx, col_idx].reshape(N, -1)
 
     i_idx = np.arange(N, dtype=np.int32)[:, None]
     valid = (j_idx >= 0) & (j_idx != i_idx)
