@@ -160,13 +160,13 @@ else:
                            phylo_state=world['phylo'], extinct=extinct,
                            seed=world.get('seed'))
         from pathlib import Path
-        from scripts.report import generate, generate_text, generate_summary, _report_stem
+        from reports.report import generate, generate_text, generate_summary, _report_stem
         generate(stats, world=world if not extinct else None, tick=tick)
         txt_path = _report_stem(stats) + ".txt"
         if not Path(txt_path).exists():
             generate_text(stats, txt_path, world=world if not extinct else None, tick=tick)
         if not args.no_report:
-            print("\n" + Path(txt_path).read_text())
+            generate_summary(stats, world=world if not extinct else None, tick=tick)
 
     atexit.register(_on_exit)
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))

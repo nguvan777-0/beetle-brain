@@ -319,6 +319,88 @@ def generate_text(stats, path=None, world=None, tick=None):
     print(f"[report] {path}")
 
 
+def generate_summary(stats, world=None, tick=None):
+    """Print a short run summary to stdout — key stats only, no file written."""
+    samples = stats.samples
+    meta    = stats.run_meta
+    hof     = stats.hall_fame
+
+    lines = []
+    w = lines.append
+
+    ticks   = meta.get('ticks', 0)
+    elapsed = meta.get('elapsed', 0)
+    tps     = meta.get('tps', 0)
+    seed    = meta.get('seed', '?')
+    status  = "EXTINCT" if meta.get('extinct') else f"pop {meta.get('final_pop', '?')}"
+
+    w("")
+    w("=" * 60)
+    w("  beetle-brain · run report")
+    w(f"  {ticks:,} ticks  ·  {elapsed:.1f}s  ·  {tps:,.0f} t/s  ·  seed {seed}  ·  {status}")
+    w("=" * 60)
+
+    if samples:
+        max_age   = max(s['max_age']   for s in samples)
+        max_eaten = max(s['max_eaten'] for s in samples)
+        max_gen   = max(s['max_gen']   for s in samples)
+        w(f"\n  gen {max_gen}  ·  age {max_age:,}  ·  eaten {max_eaten}")
+
+    hof_entries = [
+        ('longest survivor', hof.get('longest')),
+        ('most kills',       hof.get('killer')),
+        ('eldest lineage',   hof.get('eldest')),
+    ]
+    if any(v for _, v in hof_entries):
+        w("")
+        for title, wight in hof_entries:
+            if wight is None:
+                continue
+            w(f"  {title:<18}  age {wight['age']:,}  ate {wight['eaten']}  "
+              f"gen {wight['generation']}  "
+              f"size {wight['size']:.1f}  spd {wight['speed']:.2f}  pred {wight['pred_ratio']:.2f}")
+
+    if samples and len(samples) > 1:
+        smid = len(samples) // 2
+        sticks = [s['tick'] for s in samples]
+        t0, tm, t1 = sticks[0], sticks[smid], sticks[-1]
+
+        w(f"\n{'─'*60}")
+        w(f"  trajectory  (tick {t0:,} → {tm:,} → {t1:,})")
+        w(f"{'─'*60}")
+
+        def col(key): return [s[key] for s in samples]
+
+        for label, key in [
+            ("pop",         'pop'),
+            ("speed",       'speed_mean'),
+            ("size",        'size_mean'),
+            ("n_rays",      'n_rays_mean'),
+            ("active_neur", 'active_neurons_mean'),
+        ]:
+            series = col(key)
+            v0, vm, v1 = series[0], series[smid], series[-1]
+            w(f"  {label:<12}  {v0:>6.1f} → {vm:>6.1f} → {v1:>6.1f}  {_sparkline(series)}")
+
+    if samples:
+        last  = samples[-1]
+        sizes = last.get('size_all', [])
+        preds = last.get('pred_ratio_all', [])
+        if sizes and preds:
+            import math
+            n       = len(sizes)
+            sz_mean = sum(sizes) / n
+            pr_mean = sum(preds) / n
+            sz_cv   = math.sqrt(sum((x - sz_mean)**2 for x in sizes) / n) / sz_mean if sz_mean else 0
+            pr_cv   = math.sqrt(sum((x - pr_mean)**2 for x in preds) / n) / pr_mean if pr_mean else 0
+            hint    = "multiple strategies" if sz_cv > 0.08 or pr_cv > 0.08 else "monoculture"
+            w(f"\n  size {min(sizes):.2f}–{max(sizes):.2f}  "
+              f"pred {min(preds):.2f}–{max(preds):.2f}  —  {hint}")
+
+    w("")
+    print("\n".join(lines))
+
+
 def generate(stats, path=None, world=None, tick=None, write_txt=True):
     try:
         import plotly.graph_objects as go
