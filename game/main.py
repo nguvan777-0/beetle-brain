@@ -12,7 +12,7 @@ from game.renderer import draw_organism, draw_rays, draw_food
 from game.panel import draw_panel, PANEL_W
 from game.panel.hud import _anc_color
 from game.snapshot import save_snapshot, load_snapshot
-from report import generate as generate_report
+from scripts.report import generate as generate_report
 
 FPS         = 60
 SPEED_STEPS = [1, 5, 20, 100]   # ticks per frame
@@ -110,7 +110,15 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                 lineage_hist = []; t_start = time.time()
                 sel_idx = None; extinction_reported = False
             if event.type == pygame.KEYDOWN and event.key == pygame.K_s:
-                path = f"screenshot_s{world.get('seed', 0)}_{tick:07d}.png"
+                import subprocess, os
+                try:
+                    commit = subprocess.check_output(
+                        ['git', 'rev-parse', '--short', 'HEAD'],
+                        stderr=subprocess.DEVNULL).decode().strip()
+                except Exception:
+                    commit = 'unknown'
+                os.makedirs("screenshots", exist_ok=True)
+                path = f"screenshots/screenshot_{commit}_{world.get('seed', 0)}_{tick:07d}.png"
                 pygame.image.save(surf, path)
                 print(f"screenshot → {path}")
 

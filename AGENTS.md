@@ -18,12 +18,12 @@ Always use `uv` for running Python scripts and installing packages. Never use `p
 
 Run the sim with pygame, CoreML, and report generation:
 ```
-uv run --with numpy --with pygame --with coremltools --with plotly python world.py
+uv run --with coremltools --with pygame --with plotly python world.py
 ```
 
 Run headless for N seconds:
 ```
-uv run --with numpy --with coremltools --with plotly python world.py 60
+uv run --with coremltools --with plotly python world.py --duration 60
 ```
 
 `plotly` is optional for HTML report generation. `coremltools` is optional and the sim falls back to numpy.

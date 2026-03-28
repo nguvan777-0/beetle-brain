@@ -1,7 +1,7 @@
 """
 report.py — generate a self-contained HTML report from a StatsCollector.
 
-    uv run --with plotly --with numpy python report.py   # regenerate from snapshot
+    uv run --with numpy --with plotly python report.py   # regenerate from snapshot
 
 Or call generate(stats, path) directly from run_headless.py / game/main.py.
 """
@@ -10,7 +10,8 @@ import subprocess
 
 
 def _report_stem(stats):
-    """Build report filename stem: report_{commit}_{seed}_{tick:07d}"""
+    """Build report filename stem: reports/report_{commit}_{seed}_{tick:07d}"""
+    import os
     meta = stats.run_meta
     try:
         commit = subprocess.check_output(
@@ -21,7 +22,8 @@ def _report_stem(stats):
         commit = 'unknown'
     seed = meta.get('seed', 0)
     tick = meta.get('final_tick', meta.get('ticks', 0))
-    return f"report_{commit}_{seed}_{tick:07d}"
+    os.makedirs("reports", exist_ok=True)
+    return f"reports/report_{commit}_{seed}_{tick:07d}"
 
 
 def _hue_to_rgb_css(hue, s=0.85, v=0.9):
@@ -323,8 +325,6 @@ def generate(stats, path=None, world=None, tick=None, write_txt=True):
         from plotly.subplots import make_subplots
         import plotly.io as pio
     except ImportError:
-        print("[report] plotly not installed — skipping")
-        print("         add --with plotly to your uv run command")
         return
 
     samples = stats.samples

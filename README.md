@@ -13,16 +13,16 @@ Neuroevolution sim where the organism is its weights, accelerated via CoreML on 
 Requires Python 3.11+ and numpy. `coremltools` and `pygame` are optional — drop either and the sim adapts.
 
 ```bash
-uv run --with numpy --with coremltools --with pygame --with plotly python world.py
+uv run --with coremltools --with pygame python world.py
 ```
 
 To run headless (default 30s; pass a duration in seconds to override):
 
 ```bash
-uv run --with numpy --with coremltools python world.py 0
+uv run --with coremltools python world.py
 ```
 
-Pass a duration in seconds for a timed run, or omit for the default 30s. `python world.py --help` lists all flags.
+Pass `--duration N` to stop after N seconds. `python world.py --help` lists all flags.
 
 Without `coremltools` the brain runs on numpy. A plain-text report is always written on exit; add `--with plotly` for the HTML version. The first run compiles CoreML models and caches them to `build/`.
 

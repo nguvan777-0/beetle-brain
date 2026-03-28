@@ -9,8 +9,9 @@ Three measurements per backend (two subprocess runs):
 The build cache is cleared before each backend so compile times are real.
 
 Usage:
-    uv run --with numpy --with coremltools python scripts/bench_compute_units.py
-    uv run --with numpy --with coremltools python scripts/bench_compute_units.py --duration 60
+    uv run --with coremltools python scripts/bench_compute_units.py
+    uv run --with coremltools python scripts/bench_compute_units.py --duration 60
+    uv run --with numpy python scripts/bench_compute_units.py
 
 Internal:
     python scripts/bench_compute_units.py --worker <duration>
@@ -81,6 +82,12 @@ if "--worker" in sys.argv:
 
 # ── orchestrator ──────────────────────────────────────────────────────────────
 
+try:
+    import coremltools  # noqa: F401
+    _HAS_CT = True
+except ImportError:
+    _HAS_CT = False
+
 OPTIONS = [
     ("ane",    "CPU_AND_NE"),
     ("gpu",    "CPU_AND_GPU"),
@@ -88,10 +95,12 @@ OPTIONS = [
     ("all",    "ALL"),
     ("numpy",  None),
 ]
+if not _HAS_CT:
+    OPTIONS = [o for o in OPTIONS if o[1] is None]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--duration", type=int, default=60,
-                    help="seconds per phase per backend (default: 60)")
+parser.add_argument("--duration", type=int, default=5,
+                    help="seconds per phase per backend (default: 5)")
 parser.add_argument("--seed", type=int, default=None,
                     help="random seed (default: random)")
 args = parser.parse_args()
@@ -99,7 +108,25 @@ args.seed = args.seed if args.seed is not None else random.randint(0, 2**31 - 1)
 
 THIS = str(Path(__file__).resolve())
 
-from sim.config import MAX_POP
+try:
+    from sim.config import MAX_POP
+except ModuleNotFoundError:
+    print()
+    print("  error: numpy is required — use --with numpy, or --with coremltools (which includes numpy)")
+    print()
+    print("  bench_compute_units — benchmark CoreML compute unit options")
+    print()
+    print("  Usage:")
+    print("    uv run --with coremltools python scripts/bench_compute_units.py")
+    print("    uv run --with numpy python scripts/bench_compute_units.py")
+    print()
+    print("  Options:")
+    print("    --duration N    seconds per phase per backend  (default: 5)")
+    print("    --seed N        random seed  (default: random)")
+    print()
+    print("  coremltools includes numpy. omit it to benchmark numpy only.")
+    print()
+    sys.exit(1)
 
 col_w   = max(len(label) for label, _ in OPTIONS) + 2
 col_tps = 16
@@ -227,7 +254,7 @@ for label, compute_unit in OPTIONS:
     print(f"  {label}  world run ({args.duration}s):", flush=True)
     out_world = _stream(
         ["uv", "run", *_deps(compute_unit),
-         "python", "world.py", str(args.duration), "--new", "--seed", str(args.seed),
+         "python", "world.py", "--duration", str(args.duration), "--new", "--seed", str(args.seed),
          "--backend", label if compute_unit is not None else "numpy"],
         _env(compute_unit), "│",
     )

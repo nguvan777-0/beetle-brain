@@ -6,7 +6,7 @@ if sys.version_info < (3, 11):
     print(f"  beetle-brain requires Python 3.11+  (you're on {sys.version.split()[0]})")
     print()
     print("  with uv:")
-    print("    uv run --with numpy --with pygame --with coremltools --with plotly python world.py")
+    print("    uv run --with coremltools --with pygame --with plotly python world.py")
     print()
     print("  or switch to 3.11+ via pyenv, conda, or your package manager.")
     print()
@@ -16,12 +16,26 @@ try:
     import numpy  # noqa: F401
 except ImportError:
     print()
-    print("  missing dependencies — numpy is required, pygame/coremltools/plotly are optional.")
+    print("  error: numpy is required — use --with numpy, or --with coremltools (which includes numpy)")
     print()
-    print("  with uv:")
-    print("    uv run --with numpy --with pygame --with coremltools --with plotly python world.py")
+    print("  world.py — beetle-brain neuroevolution sim")
     print()
-    print("  or install numpy into your active environment.")
+    print("  Usage:")
+    print("    uv run --with coremltools --with pygame python world.py")
+    print("    uv run --with numpy python world.py")
+    print()
+    print("  Libraries:")
+    print("    numpy          required — or use coremltools which includes it")
+    print("    coremltools    CoreML acceleration on Apple Silicon (includes numpy)")
+    print("    pygame         visual display")
+    print("    plotly         HTML report generation")
+    print()
+    print("  Options:")
+    print("    --duration N        stop after N seconds  (default: run forever)")
+    print("    --backend BACKEND   CoreML backend: gpu (default), ane, cpu, all, numpy")
+    print("    --seed N            start a new world with seed N")
+    print("    --new               start a new world with a random seed")
+    print("    --fork N            load snapshot, run forward with a different RNG seed")
     print()
     sys.exit(1)
 
@@ -33,19 +47,18 @@ parser = argparse.ArgumentParser(
         'beetle-brain  —  neuroevolution in a living world\n'
         '\n'
         'quick start (with pygame):\n'
-        '  uv run --with numpy --with pygame --with coremltools --with plotly python world.py\n'
+        '  uv run --with coremltools --with pygame --with plotly python world.py\n'
         '\n'
         'headless (no pygame required):\n'
-        '  uv run --with numpy --with coremltools --with plotly python world.py\n'
+        '  uv run --with coremltools --with plotly python world.py\n'
         '\n'
-        'headless runs for 30 seconds by default, then exits with a report.\n'
-        'pass a duration (seconds) to change the limit, or 0 to run until Ctrl-C or extinction.\n'
+        'runs forever by default. pass --duration to set a time limit.\n'
         'a report is always written on exit.'
     ),
     formatter_class=argparse.RawTextHelpFormatter,
 )
-parser.add_argument('duration', nargs='?', type=float, default=30.0,
-                    help='stop after this many seconds  (default: 30, 0 = run until Ctrl-C or extinction)')
+parser.add_argument('--duration', type=float, default=None, metavar='N',
+                    help='stop after this many seconds  (default: run forever)')
 parser.add_argument('--seed',  type=int, metavar='X',
                     help='start a new world with seed X  (ignores any saved snapshot)')
 parser.add_argument('--new',   action='store_true',
@@ -89,7 +102,7 @@ else:
     from sim.stats import StatsCollector, SAMPLE_EVERY
     from game.snapshot import save_snapshot, load_snapshot
 
-    DURATION     = args.duration if args.duration else None  # 0 means run forever
+    DURATION     = args.duration  # None means run forever
     REPORT_EVERY = 500
 
     import os
@@ -132,11 +145,12 @@ else:
                            phylo_state=world['phylo'], extinct=extinct,
                            seed=world.get('seed'))
         from pathlib import Path
-        from report import generate, _report_stem
+        from scripts.report import generate, generate_text, generate_summary, _report_stem
         generate(stats, world=world if not extinct else None, tick=tick)
         txt_path = _report_stem(stats) + ".txt"
-        if Path(txt_path).exists():
-            print("\n" + Path(txt_path).read_text())
+        if not Path(txt_path).exists():
+            generate_text(stats, txt_path, world=world if not extinct else None, tick=tick)
+        print("\n" + Path(txt_path).read_text())
 
     atexit.register(_on_exit)
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
