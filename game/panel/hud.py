@@ -408,7 +408,7 @@ def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
 def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                history, lineage_history, hall_fame, sim_speed=1, vents=None, phylo_state=None,
                seed=None, pca_proj=None, sel_W_body=None, anc_ids=None,
-               paused=False, sim_speed_idx=0, snap_active=False, rst_active=False, fps=0):
+               paused=False, sim_speed_idx=0, snap_active=False, rst_active=False, fps=0, day=True):
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
@@ -451,8 +451,12 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         sub_y     = y + (row_h - sf.get_height()) // 2
         seed_surf = _render_text(str(seed), sf, COLOR)
         tick_surf = _render_text(f"t:{tick:,}", sf, COLOR)
-        fnum_surf = _render_text(f"{fps:.0f}", sf, COLOR)
-        flbl_surf = _render_text("fps", lf, COLOR)
+        if paused:
+            fnum_surf = _render_text("paused", sf, (140, 80, 80))
+            flbl_surf = _render_text("", lf, COLOR)
+        else:
+            fnum_surf = _render_text(f"{fps:.0f}", sf, COLOR)
+            flbl_surf = _render_text("fps", lf, COLOR)
         pair_w    = seed_surf.get_width() + 6 + tick_surf.get_width()
         seed_x    = max(px + 6 + title_surf.get_width() + 8,
                         px + (PANEL_W - pair_w) // 2)
@@ -464,8 +468,12 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                                sub_y + sf.get_height() - lf.get_height()))
     else:
         sub_y     = y + (row_h - font_lg.get_height()) // 2
-        fnum_surf = _render_text(f"{fps:.0f}", font_lg, (80, 95, 130))
-        flbl_surf = _render_text("fps", font, (80, 95, 130))
+        if paused:
+            fnum_surf = _render_text("paused", font_lg, (140, 80, 80))
+            flbl_surf = _render_text("", font, (80, 95, 130))
+        else:
+            fnum_surf = _render_text(f"{fps:.0f}", font_lg, (80, 95, 130))
+            flbl_surf = _render_text("fps", font, (80, 95, 130))
         fps_x     = px + PANEL_W - 6 - fnum_surf.get_width() - flbl_surf.get_width()
         surf.blit(fnum_surf, (fps_x, sub_y))
         surf.blit(flbl_surf, (fps_x + fnum_surf.get_width(),
@@ -536,9 +544,9 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
     # row 2: three keycaps distributed across the panel
     row2_top = y - PY2
-    sp_lbl   = "__ICON_PLAY__" if paused else "__ICON_PAUSE__"
+    sp_lbl   = "nite" if day else "day"
     keys = [
-        ("space", paused,       sp_lbl,       48,   0),
+        ("space", not day,      sp_lbl,       48,   0),
         ("s",     snap_active,  "screenshot", None, 7),
         ("r",     rst_active,   "restart",    None, 8),
     ]

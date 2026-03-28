@@ -46,6 +46,7 @@ class RenderState:
     seed:          Any
     phylo_state:   dict
     is_extinct:    bool
+    day:           bool        # True = day (sunlight on); False = night
 
 
 def _copy_pop(pop):
@@ -128,7 +129,11 @@ class SimRunner(threading.Thread):
                 return False
             elif tag == 'pause':
                 self._paused = not self._paused
-                if self._state is not None:   # push updated flag to render thread immediately
+                if self._state is not None:
+                    self._publish()
+            elif tag == 'toggle_day':
+                self._world['day'] = not self._world.get('day', True)
+                if self._state is not None:
                     self._publish()
             elif tag == 'speed':
                 self._speed_idx = cmd[1]
@@ -200,6 +205,7 @@ class SimRunner(threading.Thread):
             seed          = world.get('seed'),
             phylo_state   = world['phylo'],
             is_extinct    = self._is_extinct,
+            day           = world.get('day', True),
         )
         with self._lock:
             self._state = state
@@ -401,6 +407,9 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                     sel_idx = idx if dists[idx] < 40 else None
 
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                runner.send(('toggle_day',))
+
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
                 runner.send(('pause',))
 
             if event.type == pygame.KEYDOWN and event.key in (
@@ -450,9 +459,11 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
         surf.fill((10, 14, 20))
 
         if getattr(sim, 'COASTLINE_X', None) is not None:
-            land_rect = pygame.Rect(sim.COASTLINE_X, 0, sim.WIDTH - sim.COASTLINE_X, sim.HEIGHT)
-            pygame.draw.rect(surf, (30, 30, 20), land_rect)
-            pygame.draw.line(surf, (40, 45, 30),
+            land_rect  = pygame.Rect(sim.COASTLINE_X, 0, sim.WIDTH - sim.COASTLINE_X, sim.HEIGHT)
+            land_color = (30, 30, 20) if snap.day else (12, 10, 22)
+            shore_color = (40, 45, 30) if snap.day else (28, 24, 45)
+            pygame.draw.rect(surf, land_color, land_rect)
+            pygame.draw.line(surf, shore_color,
                              (sim.COASTLINE_X, 0), (sim.COASTLINE_X, sim.HEIGHT), 2)
 
         draw_food(surf, snap.food, snap.vents)
@@ -469,7 +480,7 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                    paused=snap.paused, sim_speed_idx=snap.sim_speed_idx,
                    snap_active=(now - last_snap_t) < 0.2,
                    rst_active=(now - last_rst_t) < 0.2,
-                   fps=clock.get_fps())
+                   fps=clock.get_fps(), day=snap.day)
 
         if snap.is_extinct:
             _draw_extinction_overlay(surf, font, font_lg, snap.tick)

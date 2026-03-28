@@ -44,7 +44,7 @@ def tick(world, rng):
                       + pop['active_neurons']**1.5  * BRAIN_TAX)
 
     # ── sunlight (land only) ─────────────────────────────────────────────────
-    if ENERGY_SUNLIGHT > 0:
+    if ENERGY_SUNLIGHT > 0 and world.get('day', True):
         land_mask = pop['x'] >= COASTLINE_X
         if land_mask.any():
             from sim.grid.constants import GRID_SCALE, GH, GW

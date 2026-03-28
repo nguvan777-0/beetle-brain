@@ -53,4 +53,4 @@ def new_world(seed=None):
     phylo_state = phylo.new_state(N_START)
     pop         = make_pop(N_START, rng, phylo_state)
     food        = refill_vents(np.empty((0, 2), dtype=np.float32), vents, rng, N_FOOD // len(vents))
-    return {'pop': pop, 'food': food, 'vents': vents, 'phylo': phylo_state, 'seed': name}
+    return {'pop': pop, 'food': food, 'vents': vents, 'phylo': phylo_state, 'seed': name, 'day': True}
