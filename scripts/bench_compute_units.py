@@ -11,7 +11,6 @@ Calls itself as a subprocess for the full-pop phase (--worker flag, internal).
 """
 import argparse
 import os
-import random
 import re
 import shutil
 import subprocess
@@ -33,9 +32,10 @@ if "--worker" in sys.argv:
 
     wi       = sys.argv.index("--worker")
     duration = float(sys.argv[wi + 1])
-    seed     = int(sys.argv[wi + 2])
+    seed     = sys.argv[wi + 2]
 
-    rng = np.random.default_rng(seed)
+    from sim.seed import to_int
+    rng = np.random.default_rng(to_int(seed))
     world, _, _, _, _ = load_snapshot(rng)
     if world is None or len(world['pop']['x']) == 0:
         world = new_world(seed=seed)
@@ -132,7 +132,7 @@ parser.add_argument('--backend', nargs='?', const=_MISSING, default='gpu' if _HA
                          '  numpy          — no CoreML\n'
                          '  every          — each of the above\n'
                          '  ane,gpu        — comma-separate for a subset')
-parser.add_argument('--seed', type=_int, nargs='?', const=_MISSING, default=None, metavar='N',
+parser.add_argument('--seed', type=str, nargs='?', const=_MISSING, default=None, metavar='N',
                     help='random seed  (default: random)')
 parser._optionals.title = 'Options'
 
@@ -148,14 +148,15 @@ args = parser.parse_args()
 if args.duration is _MISSING:
     parser.error('--duration requires a value  —  expected a number')
 if args.seed is _MISSING:
-    parser.error('--seed requires a value  —  expected a number')
+    parser.error('--seed requires a value')
 
 _ALL_LABELS = [label for label, _ in OPTIONS]
 _CHOICES    = _ALL_LABELS + ['every']
 if args.backend is _MISSING:
     parser.error(f"--backend requires a value  —  choices: {', '.join(_CHOICES)}")
 
-args.seed = args.seed if args.seed is not None else random.randint(0, 2**31 - 1)
+from sim.seed import random_name
+args.seed = args.seed if args.seed is not None else random_name()
 
 if args.backend.lower() != 'every':
     _requested = [b.strip().lower() for b in args.backend.split(',')]

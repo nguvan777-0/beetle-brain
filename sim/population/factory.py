@@ -46,11 +46,11 @@ def make_pop(n, rng, phylo_state):
 
 
 def new_world(seed=None):
-    if seed is None:
-        seed = int(np.random.default_rng().integers(1_000_000))
-    rng         = np.random.default_rng(seed)
-    vents       = make_vents(seed)
+    from sim.seed import parse, to_int
+    name        = parse(seed)
+    rng         = np.random.default_rng(to_int(name))
+    vents       = make_vents(name)
     phylo_state = phylo.new_state(N_START)
     pop         = make_pop(N_START, rng, phylo_state)
     food        = refill_vents(np.empty((0, 2), dtype=np.float32), vents, rng, N_FOOD // len(vents))
-    return {'pop': pop, 'food': food, 'vents': vents, 'phylo': phylo_state, 'seed': seed}
+    return {'pop': pop, 'food': food, 'vents': vents, 'phylo': phylo_state, 'seed': name}

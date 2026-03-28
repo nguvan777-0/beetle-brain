@@ -58,7 +58,7 @@ parser.add_argument('--backend', nargs='?', const=_MISSING, default='CPU_AND_GPU
                          '  gpu, ane, cpu  — CoreML with that compute unit\n'
                          '  all            — CoreML with ANE + GPU + CPU together\n'
                          '  numpy          — no CoreML')
-parser.add_argument('--seed',  type=_int, nargs='?', const=_MISSING, default=None, metavar='N',
+parser.add_argument('--seed',  type=str, nargs='?', const=_MISSING, default=None, metavar='N',
                     help='start fresh with seed N  (ignores snapshot)')
 parser.add_argument('--new',   action='store_true',
                     help='start fresh with a random seed  (ignores snapshot)')
@@ -78,7 +78,7 @@ args = parser.parse_args()
 if args.duration is _MISSING:
     parser.error('--duration requires a value  —  expected a number')
 if args.seed is _MISSING:
-    parser.error('--seed requires a value  —  expected a number')
+    parser.error('--seed requires a value')
 if args.fork is _MISSING:
     parser.error('--fork requires a value  —  expected a number')
 if args.backend is _MISSING:
@@ -138,7 +138,8 @@ else:
 
     from sim.config import SIZE_MIN, SIZE_MAX, N_RAYS, N_HIDDEN
 
-    rng_seed = args.fork if args.fork is not None else world['seed']
+    from sim.seed import to_int
+    rng_seed = args.fork if args.fork is not None else to_int(world['seed'])
     rng      = np.random.default_rng(rng_seed)
     extinct     = False
     next_sample = tick + SAMPLE_EVERY

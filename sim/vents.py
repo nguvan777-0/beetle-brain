@@ -4,9 +4,9 @@ from sim.config import WIDTH, HEIGHT, WORLD_SEED, VENT_COUNT_MIN, VENT_COUNT_MAX
 
 
 def make_vents(seed=None):
-    """Generate vent positions deterministically from seed.
-    Vents are kept VENT_RADIUS away from map edges, but can touch the coastline."""
-    rng = np.random.default_rng(seed)
+    """Generate vent positions deterministically from seed (any string or None)."""
+    from sim.seed import to_int, parse
+    rng = np.random.default_rng(to_int(parse(seed)))
     n   = int(rng.integers(VENT_COUNT_MIN, VENT_COUNT_MAX + 1))
     m   = VENT_RADIUS
     max_x = COASTLINE_X  # allow vents right up to the beach

@@ -40,7 +40,7 @@ def save_snapshot(world, tick, history, hall_fame, stats=None):
         phylo_parent=phylo_state['parent'],
         phylo_hue=phylo_state['hue'],
         phylo_next_id=np.array([phylo_state['next_id']], dtype=np.int32),
-        seed=np.array([world.get('seed', 0)], dtype=np.int64),
+        seed=np.array([str(world.get('seed', ''))], dtype='S256'),
         **extra)
     print(f"[saved] {len(pop['x'])} organisms → {SNAPSHOT_PATH}  (tick {tick})")
 
@@ -98,7 +98,12 @@ def load_snapshot(rng, path=SNAPSHOT_PATH):
             phylo_state['hue'] = np.zeros(phylo.M, dtype=np.float32)
     else:
         phylo_state = phylo.from_snapshot(pop['individual_id'])
-    seed        = int(d['seed'][0]) if 'seed' in d else None
+    if 'seed' not in d:
+        seed = None
+    elif d['seed'].dtype.kind in ('S', 'U'):   # new string format
+        seed = d['seed'][0].decode() if d['seed'].dtype.kind == 'S' else str(d['seed'][0])
+    else:                                        # old int64 snapshots
+        seed = str(int(d['seed'][0]))
     world       = {'pop': pop, 'food': d['food'].astype(np.float32),
                    'vents': vents, 'phylo': phylo_state, 'seed': seed}
     history     = [tuple(row) for row in d['hist']] if d['hist'].ndim == 2 and len(d['hist']) else []
