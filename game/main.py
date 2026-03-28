@@ -406,6 +406,7 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
     sel_idx     = None
     last_snap_t = -999.0
     last_rst_t  = -999.0
+    last_chan_t = -999.0
 
     while True:
         snap = runner.get_state()
@@ -447,6 +448,8 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                 runner.send(('speed', event.key - pygame.K_KP1 + 1))
 
             if event.type == pygame.KEYDOWN and event.key == pygame.K_c:
+                last_chan_t = time.time()
+                sel_idx     = None
                 runner.send(('change_channel',))
             if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 last_rst_t = time.time()
@@ -503,6 +506,7 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                    paused=snap.paused, sim_speed_idx=snap.sim_speed_idx,
                    snap_active=(now - last_snap_t) < 0.2,
                    rst_active=(now - last_rst_t) < 0.2,
+                   chan_active=(now - last_chan_t) < 0.2,
                    fps=clock.get_fps(), day=snap.day)
 
         if snap.is_extinct:

@@ -541,7 +541,7 @@ def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
 def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                history, lineage_history, hall_fame, sim_speed=1, vents=None, phylo_state=None,
                seed=None, pca_proj=None, sel_W_body=None, anc_ids=None,
-               paused=False, sim_speed_idx=0, snap_active=False, rst_active=False, fps=0, day=True):
+               paused=False, sim_speed_idx=0, snap_active=False, rst_active=False, chan_active=False, fps=0, day=True):
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
@@ -675,13 +675,14 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         lx1 += kw + s_gap
     y += kl_font.get_height() + _KEYCAP_SHELF + PY2 + 6
 
-    # row 2: three keycaps distributed across the panel
+    # row 2: four keycaps distributed across the panel
     row2_top = y - PY2
     sp_lbl   = "__ICON_SUN__" if day else "__ICON_MOON__"
     keys = [
-        ("space", day,           sp_lbl,       48,   0),
-        ("s",     snap_active,  "__ICON_FRAME__",  None, 7),
+        ("space", day,          sp_lbl,             48,   0),
+        ("s",     snap_active,  "__ICON_FRAME__",   None, 7),
         ("r",     rst_active,   "__ICON_RESTART__", None, 8),
+        ("c",     chan_active,  "channel",           None, 3),
     ]
     widths  = [_keycap_width(k, font_sm, label=lbl, f_label=kl_font, face_w=fw)
                for k, _, lbl, fw, _ in keys]
