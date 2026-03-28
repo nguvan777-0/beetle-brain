@@ -92,6 +92,76 @@ from functools import lru_cache
 def _render_text(text: str, font, color: tuple):
     return font.render(str(text), True, color)
 
+_KEYCAP_SHELF      = 4
+_KEYCAP_FACE_COLOR = (75, 86, 126)
+_KEYCAP_FACE_PRESS = (50, 58, 88)
+_KEYCAP_RIM        = (92, 106, 150)
+_KEYCAP_RIM_PRESS  = (65, 75, 110)
+_KEYCAP_SHADOW     = (3, 3, 8)
+_KEYCAP_HL1        = (132, 150, 202)   # top edge
+_KEYCAP_HL2        = (115, 132, 182)   # left edge
+_KEYCAP_KEY_COLOR  = (148, 165, 215)   # key name text
+_KEYCAP_LBL_COLOR  = (170, 185, 225)   # label text to the right
+
+
+def _keycap_width(key_name, f_key, label=None, f_label=None, face_w=None):
+    """Width of a keycap widget without drawing anything."""
+    S     = _KEYCAP_SHELF
+    KPX   = 7
+    key_s = _render_text(key_name, f_key, _KEYCAP_KEY_COLOR)
+    fw    = face_w if face_w is not None else key_s.get_width() + KPX * 2
+    if label and f_label:
+        lbl_s = _render_text(label, f_label, _KEYCAP_LBL_COLOR)
+        return fw + S + 6 + lbl_s.get_width()
+    return fw + S
+
+
+def _draw_keycap(surf, lx, top_y, key_name, pressed, f_key,
+                 label=None, f_label=None, label_color=None, face_w=None):
+    """Keyboard keycap: shadow bottom-right, face slides into it when pressed.
+    key_name inside the key; optional label drawn to the right.
+    Returns total width consumed (key + shelf + gap + label)."""
+    S     = _KEYCAP_SHELF
+    KPX, KPY = 7, 3
+    key_s = _render_text(key_name, f_key, _KEYCAP_KEY_COLOR)
+    fw    = face_w if face_w is not None else key_s.get_width() + KPX * 2
+    fh    = key_s.get_height() + KPY * 2
+
+    # shadow: fixed at bottom-right — represents the key's physical depth
+    pygame.draw.rect(surf, _KEYCAP_SHADOW,
+                     pygame.Rect(lx + S, top_y + S, fw, fh), border_radius=4)
+
+    # face: proud at top-left unpressed, drops into shadow when pressed
+    fx = lx + (S if pressed else 0)
+    fy = top_y + (S if pressed else 0)
+    pygame.draw.rect(surf, _KEYCAP_FACE_PRESS if pressed else _KEYCAP_FACE_COLOR,
+                     pygame.Rect(fx, fy, fw, fh), border_radius=4)
+
+    # rim
+    pygame.draw.rect(surf, _KEYCAP_RIM_PRESS if pressed else _KEYCAP_RIM,
+                     pygame.Rect(fx, fy, fw, fh), 1, border_radius=4)
+
+    # top-left highlight (light source top-left, shadow bottom-right)
+    if not pressed:
+        pygame.draw.line(surf, _KEYCAP_HL1,
+                         (fx + 3, fy + 1), (fx + fw - 4, fy + 1))
+        pygame.draw.line(surf, _KEYCAP_HL2,
+                         (fx + 1, fy + 3), (fx + 1, fy + fh - 4))
+
+    # key name centred on face
+    surf.blit(key_s, (fx + (fw - key_s.get_width()) // 2,
+                      fy + (fh - key_s.get_height()) // 2))
+
+    total_w = fw + S
+    if label and f_label:
+        lc    = label_color if label_color else _KEYCAP_LBL_COLOR
+        lbl_s = _render_text(label, f_label, lc)
+        lbl_y = top_y + (fh + S - lbl_s.get_height()) // 2
+        surf.blit(lbl_s, (lx + fw + S + 6, lbl_y))
+        total_w = fw + S + 6 + lbl_s.get_width()
+    return total_w
+
+
 def _lerp_color(t, lo=(60, 100, 200), mid=(60, 200, 120), hi=(220, 80, 60)):
     """Blue→green→red gradient for 0→1."""
     if t < 0.5:
@@ -305,19 +375,49 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
     tf         = _title_font()
     row_h      = tf.get_height()
-    sub_y      = y + (row_h - font_lg.get_height()) // 2   # vertical centre for smaller items
 
     title_surf = _render_text("BEETLE-BRAIN", tf, (220, 220, 255))
     surf.blit(title_surf, (px + 6, y))
 
     if seed is not None:
-        seed_surf = _render_text(str(seed), font_lg, (80, 95, 130))
+        COLOR  = (80, 95, 130)
+        _steps = (font_lg, font, font_sm)
+        def _sf_smaller(f):
+            return _steps[min(_steps.index(f) + 1, len(_steps) - 1)]
+        def _fps_w(f):
+            lf = _sf_smaller(f)
+            return (_render_text(f"{fps:.0f}", f, COLOR).get_width()
+                    + _render_text("fps", lf, COLOR).get_width())
+        available = PANEL_W - (6 + title_surf.get_width() + 8) - 6
+        sf = next(
+            f for f in _steps
+            if (_render_text(str(seed), f, COLOR).get_width() + 6
+                + _render_text(f"t:{tick:,}", f, COLOR).get_width() + 12
+                + _fps_w(f)) <= available
+        )
+        lf        = _sf_smaller(sf)
+        sub_y     = y + (row_h - sf.get_height()) // 2
+        seed_surf = _render_text(str(seed), sf, COLOR)
+        tick_surf = _render_text(f"t:{tick:,}", sf, COLOR)
+        fnum_surf = _render_text(f"{fps:.0f}", sf, COLOR)
+        flbl_surf = _render_text("fps", lf, COLOR)
+        pair_w    = seed_surf.get_width() + 6 + tick_surf.get_width()
         seed_x    = max(px + 6 + title_surf.get_width() + 8,
-                        px + (PANEL_W - seed_surf.get_width()) // 2)
+                        px + (PANEL_W - pair_w) // 2)
+        fps_x     = px + PANEL_W - 6 - fnum_surf.get_width() - flbl_surf.get_width()
         surf.blit(seed_surf, (seed_x, sub_y))
-
-    fps_surf = _render_text(f"{fps:.0f}fps", font_lg, (80, 95, 130))
-    surf.blit(fps_surf, (px + PANEL_W - 6 - fps_surf.get_width(), sub_y))
+        surf.blit(tick_surf, (seed_x + seed_surf.get_width() + 6, sub_y))
+        surf.blit(fnum_surf, (fps_x, sub_y))
+        surf.blit(flbl_surf, (fps_x + fnum_surf.get_width(),
+                               sub_y + sf.get_height() - lf.get_height()))
+    else:
+        sub_y     = y + (row_h - font_lg.get_height()) // 2
+        fnum_surf = _render_text(f"{fps:.0f}", font_lg, (80, 95, 130))
+        flbl_surf = _render_text("fps", font, (80, 95, 130))
+        fps_x     = px + PANEL_W - 6 - fnum_surf.get_width() - flbl_surf.get_width()
+        surf.blit(fnum_surf, (fps_x, sub_y))
+        surf.blit(flbl_surf, (fps_x + fnum_surf.get_width(),
+                               sub_y + font_lg.get_height() - font.get_height()))
 
     y += row_h + 4
 
@@ -360,8 +460,6 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
             _pill(lx, text_y, label, i, active, f)
             lx += w + gap
 
-    state_label = "sp:PAUSE" if paused else "sp:PLAY "
-
     _pill_row([
         ("0:.5x",  1, sim_speed_idx == 0, None),
         ("1:1x",   2, sim_speed_idx == 1, None),
@@ -372,17 +470,29 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     ], y)
     y += font.get_height() + 6
 
-    _pill_row([
-        (state_label,    0, paused,       None),
-        ("s:screenshot", 7, snap_active,  font_lg),
-        ("r:restart",    8, rst_active,   font_lg),
-    ], y)
-    y += font_lg.get_height() + 6
+    # row 2: three keycaps distributed across the panel
+    row2_top = y - PY2
+    sp_lbl   = "PAUSE" if paused else "PLAY"
+    keys = [
+        ("space", paused,       sp_lbl,       48,   0),
+        ("s",     snap_active,  "screenshot", None, 7),
+        ("r",     rst_active,   "restart",    None, 8),
+    ]
+    widths  = [_keycap_width(k, font_sm, label=lbl, f_label=font_lg, face_w=fw)
+               for k, _, lbl, fw, _ in keys]
+    gap     = (PANEL_W - MARGIN * 2 - sum(widths)) / max(len(keys) - 1, 1)
+    lx3     = px + MARGIN
+    for (kname, kpressed, klabel, kfw, ci), kw in zip(keys, widths):
+        lc = _LEGEND_COLORS[ci][0 if kpressed else 1]
+        _draw_keycap(surf, lx3, row2_top, kname, kpressed, font_sm,
+                     label=klabel, f_label=font_lg, face_w=kfw, label_color=lc)
+        lx3 += kw + gap
+    y += font_sm.get_height() + _KEYCAP_SHELF + PY2 + 6
     sep()
 
     N = len(pop['x'])
     if N > 0:
-        txt(f"tick {tick:,}  pop {N}  gen {int(pop['generation'].max())}  age {int(pop['age'].max())}  hunts {int(pop['hunts'].max())}", font_sm, (160, 200, 160))
+        txt(f"pop {N}  gen {int(pop['generation'].max())}  age {int(pop['age'].max())}  hunts {int(pop['hunts'].max())}", font_sm, (160, 200, 160))
         sep()
 
     # ── stacked area: phylo sub-lineage populations over time ────────────
