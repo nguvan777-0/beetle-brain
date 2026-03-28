@@ -59,7 +59,7 @@ if "--worker" in sys.argv:
     init_ane()
     import brain.coreml_sense_brain as _sb
     t_wait = time.time()
-    while not _sb._use_coreml and time.time() - t_wait < 90:
+    while not _sb._use_coreml and time.time() - t_wait < 300:
         time.sleep(0.05)
 
     ticks = 0
@@ -108,7 +108,7 @@ def _deps(compute_unit):
 def _run_world(compute_unit, duration):
     cmd = [
         "uv", "run", *_deps(compute_unit),
-        "python", "world.py", str(duration), "--new", "--seed", "12345",
+        "python", "world.py", str(duration), "--new", "--seed", "12345", "--bench",
     ]
     r = subprocess.run(cmd, cwd=ROOT, env=_env(compute_unit),
                        capture_output=True, text=True)
@@ -217,8 +217,4 @@ for (label, load_str, load_s,
           f"{_fmt(mature_tps):>{col_tps}}  "
           f"{_fmt(max_tps):>{col_tps}}")
 
-print()
-for label, load_str, load_s, *_ in rows:
-    if load_s > args.duration * 0.4:
-        print(f"† {label}: {load_s:.0f}s load — start/mature t/s include numpy warm-up")
 print()

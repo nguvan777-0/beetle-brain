@@ -148,18 +148,19 @@ The `.txt` covers the same run — trait means at exit, sparkline trajectories, 
 
 ## Performance
 
-Measured on Apple Silicon (Mac mini M4). All numbers are headless, `--new`, full sim loop.
+Measured on Apple Silicon (Mac mini M4). Headless, `--new --seed 12345`, 60s per phase, compilation time excluded. start = pop~16, mature = pop~1418, maxpop = 4096.
 
-| backend | load time | tick rate |
-|---------|-----------|-----------|
-| CoreML `CPU_AND_GPU` ✓ | ~0.1s | ~120–140 t/s |
-| CoreML `ALL` (ANE)     | ~7s   | ~100–110 t/s |
-| CoreML `CPU_ONLY`      | ~0.1s | ~60–80 t/s   |
-| numpy fallback         | instant | ~30–50 t/s |
+| backend | load | start | mature | maxpop |
+|---------|------|-------|--------|--------|
+| CoreML `CPU_AND_GPU` ✓ | ~0.4s | ~1000 t/s | ~47 t/s | ~24 t/s |
+| CoreML `CPU_AND_NE`    | ~30s  | ~1000 t/s | ~192 t/s | — |
+| CoreML `ALL`           | ~22s  | ~1000 t/s | ~40 t/s | ~18 t/s |
+| CoreML `CPU_ONLY`      | ~0.4s | ~1250 t/s | ~42 t/s | ~14 t/s |
+| numpy fallback         | ~0.4s | ~1000 t/s | ~45 t/s | ~23 t/s |
 
-CoreML models load in a background thread — the sim starts on numpy and switches to GPU automatically within the first tick. No visible pause.
+CoreML models load in a background thread — the sim starts on numpy and switches automatically once ready.
 
-`CPU_AND_GPU` is the default. ANE (`ALL`) costs 7s of startup for ANE compilation and ends up slower on this workload — the per-wight batched matmuls at `MAX_POP` suit the GPU better than the ANE.
+`CPU_AND_GPU` is the default. Five bucket models `[16, 64, 256, 1024, 4096]` are compiled at startup (~1.7s total); the smallest bucket that fits the current population is used, bounding padding waste to ≤4x. `CPU_AND_NE` is notably faster at mid-range populations but costs ~30s to compile onto the ANE — maxpop is unmeasured because the ANE recompiles fresh per process.
 
 
 ## License
