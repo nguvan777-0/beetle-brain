@@ -128,6 +128,8 @@ class SimRunner(threading.Thread):
                 return False
             elif tag == 'pause':
                 self._paused = not self._paused
+                if self._state is not None:   # push updated flag to render thread immediately
+                    self._publish()
             elif tag == 'speed':
                 self._speed_idx = cmd[1]
             elif tag == 'reset':
