@@ -5,6 +5,7 @@ Neuroevolution sim where the organism is its weights, accelerated via CoreML on 
 - **Encoded** (genome, evolves): speed, fov, size, color, mouth, pred_ratio, mutation rates, HGT rates, epigenetic carry-over, active neurons, n_rays — 20 floats decoded via sigmoid.
 - **Derived** (our rules, does not evolve): `energy_max = 10 × size²` (storage ∝ volume), `drain = 0.010 × size^0.75` (Kleiber's law).
 - **Emergent**: predator/prey dimorphism, camouflage arms races, lineage divergence, and spatial memory — nothing encodes these, they appear.
+- **Environment**: `SPACE` toggles day/night — night cuts all sunlight from the land biome, shifting selection pressure toward water-side and stored-energy strategies.
 
 ![beetle-brain](https://github.com/nguvan777-0/beetle-brain/releases/download/screenshots/screenshot_f8fa4f5_225919_0001894.png)
 

@@ -121,7 +121,51 @@ def _render_text(text: str, font, color: tuple):
         pygame.draw.rect(res, color, (sz*0.2, sz*0.15, w, sz*0.7))
         pygame.draw.rect(res, color, (sz*0.6, sz*0.15, w, sz*0.7))
         return res
-        
+
+    if text_str == "__ICON_SUN__":
+        import math
+        sz    = font.get_height()
+        res   = pygame.Surface((sz, sz), pygame.SRCALPHA)
+        color = (255, 205, 50)
+        cx, cy = sz * 0.5, sz * 0.5
+        r_core = sz * 0.22
+        r_tip  = sz * 0.46
+        r_base = sz * 0.30
+        # 8 triangular rays around the core
+        for i in range(8):
+            a      = math.pi * 2 * i / 8
+            a_prev = math.pi * 2 * (i - 0.4) / 8
+            a_next = math.pi * 2 * (i + 0.4) / 8
+            tip  = (cx + math.cos(a)      * r_tip,  cy + math.sin(a)      * r_tip)
+            base1 = (cx + math.cos(a_prev) * r_base, cy + math.sin(a_prev) * r_base)
+            base2 = (cx + math.cos(a_next) * r_base, cy + math.sin(a_next) * r_base)
+            pygame.draw.polygon(res, color, [tip, base1, base2])
+        pygame.draw.circle(res, color, (int(cx), int(cy)), int(r_core))
+        return res
+
+    if text_str == "__ICON_MOON__":
+        import math
+        sz    = font.get_height()
+        res   = pygame.Surface((sz, sz), pygame.SRCALPHA)
+        color = (180, 200, 235)
+        cx, cy = sz * 0.5, sz * 0.5
+        r_out   = sz * 0.42   # outer circle radius
+        r_in    = sz * 0.34   # inner bite radius
+        bite_dx = sz * 0.18   # offset of the bite circle to the right
+        n       = 32
+        pts = []
+        # outer arc: full circle, left-to-right (counter-clockwise from top)
+        for i in range(n + 1):
+            a = math.pi * 0.35 + math.pi * 1.3 * i / n   # ~63° sweep on the left side
+            pts.append((cx + math.cos(a) * r_out, cy + math.sin(a) * r_out))
+        # inner arc: bite circle, traces the crescent's inner edge
+        for i in range(n + 1):
+            a = math.pi * 0.35 + math.pi * 1.3 - math.pi * 1.3 * i / n
+            pts.append((cx + bite_dx + math.cos(a) * r_in,
+                        cy           + math.sin(a) * r_in))
+        pygame.draw.polygon(res, color, [(int(x), int(y)) for x, y in pts])
+        return res
+
     # Automatically style the "x" part of speed labels (like "1x", "5x", "100x")
     if text_str.endswith("x") and len(text_str) > 1 and text_str not in ("fps", "MAX"):
         num_str = text_str[:-1]
@@ -199,14 +243,16 @@ def _draw_keycap(surf, lx, top_y, key_name, pressed, f_key,
     if lbl_s:
         lbl_x = lx + fw + S
         if pressed:
-            # active: z-elevation effect. Text moves purely straight UP to avoid 
-            # sliding under the next button's bounding box that gets drawn next.
-            shadow_s = _render_text(label, f_label, (10, 10, 15))
-            # Shadow cast down and left!
-            surf.blit(shadow_s, (lbl_x - 2, lbl_y + 2))
-            surf.blit(shadow_s, (lbl_x - 1, lbl_y + 1))
-            # The brightly colored text itself moves straight up
-            surf.blit(lbl_s, (lbl_x, lbl_y - 2))
+            if label.startswith("__ICON_"):
+                # Icons have their own color — just shift up, no shadow copy
+                surf.blit(lbl_s, (lbl_x, lbl_y - 2))
+            else:
+                # active: z-elevation effect. Text moves purely straight UP to avoid
+                # sliding under the next button's bounding box that gets drawn next.
+                shadow_s = _render_text(label, f_label, (10, 10, 15))
+                surf.blit(shadow_s, (lbl_x - 2, lbl_y + 2))
+                surf.blit(shadow_s, (lbl_x - 1, lbl_y + 1))
+                surf.blit(lbl_s, (lbl_x, lbl_y - 2))
         else:
             # inactive: label to the right
             surf.blit(lbl_s, (lbl_x, lbl_y))
@@ -544,9 +590,9 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
     # row 2: three keycaps distributed across the panel
     row2_top = y - PY2
-    sp_lbl   = "nite" if day else "day"
+    sp_lbl   = "__ICON_SUN__" if day else "__ICON_MOON__"
     keys = [
-        ("space", not day,      sp_lbl,       48,   0),
+        ("space", day,           sp_lbl,       48,   0),
         ("s",     snap_active,  "screenshot", None, 7),
         ("r",     rst_active,   "restart",    None, 8),
     ]
