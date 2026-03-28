@@ -150,6 +150,34 @@ def _render_text(text: str, font, color: tuple):
         pygame.draw.rect(res, color, (sz*0.6, sz*0.15, w, sz*0.7))
         return res
 
+    if text_str == "__ICON_TV__":
+        sz    = font.get_height()
+        res   = pygame.Surface((sz, sz), pygame.SRCALPHA)
+        white = (225, 225, 225)
+        dark  = (20, 24, 40)
+        mid   = (150, 150, 160)
+        cx    = sz // 2
+        # antennae — longer, wider spread
+        ay = int(sz * 0.28)
+        pygame.draw.line(res, white, (cx - 1, ay), (cx - int(sz*0.38), 0))
+        pygame.draw.line(res, white, (cx + 1, ay), (cx + int(sz*0.38), 0))
+        # TV body: full width, below antennae
+        by = ay;  bh = sz - ay
+        pygame.draw.rect(res, white, (0, by, sz, bh), border_radius=2)
+        # screen: upper ~65% of body, nearly full width
+        sl = 1
+        sh = int(bh * 0.64)
+        pygame.draw.rect(res, dark, (sl, by + sl, sz - sl*2, sh), border_radius=1)
+        # thin divider between screen and VHS section
+        dy = by + sl + sh + 1
+        pygame.draw.line(res, mid, (1, dy), (sz-2, dy))
+        # VHS tape slot: full-width narrow slot, centred in lower section
+        vy = dy + max(1, int(sz * 0.08))
+        vh = max(2, int(sz * 0.15))
+        pygame.draw.rect(res, dark, (sl + 1, vy, sz - sl*2 - 2, vh), border_radius=1)
+        pygame.draw.line(res, mid, (sl+2, vy+1), (sz - sl - 4, vy+1))
+        return res
+
     if text_str == "__ICON_RESTART__":
         import math
         sz    = font.get_height()
@@ -682,7 +710,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         ("space", day,          sp_lbl,             48,   0),
         ("s",     snap_active,  "__ICON_FRAME__",   None, 7),
         ("r",     rst_active,   "__ICON_RESTART__", None, 8),
-        ("c",     chan_active,  "channel",           None, 3),
+        ("c",     chan_active,  "__ICON_TV__",        None, 3),
     ]
     widths  = [_keycap_width(k, font_sm, label=lbl, f_label=kl_font, face_w=fw)
                for k, _, lbl, fw, _ in keys]
