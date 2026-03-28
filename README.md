@@ -49,7 +49,7 @@ Options:
   --no-report          skip printing the report on exit
 ```
 
-**Keys:** `SPACE` play/pause · `0–5` speed (0.5×/1×/5×/20×/100×/MAX) · `S` screenshot · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
+**Keys:** `SPACE` day/night · `P` pause · `0–5` speed (0.5×/1×/5×/20×/100×/MAX) · `S` screenshot · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
 ## the wight
 
