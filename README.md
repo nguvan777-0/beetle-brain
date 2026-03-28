@@ -10,21 +10,44 @@ Neuroevolution sim where the organism is its weights, accelerated via CoreML on 
 
 ## Run with the sun
 
-Requires Python 3.11+ and numpy. `coremltools` and `pygame` are optional — drop either and the sim adapts.
-
+On Apple Silicon:
 ```bash
 uv run --with coremltools --with pygame python world.py
 ```
 
-To run headless (runs until Ctrl-C or extinction, then writes a report):
-
+Everywhere else:
 ```bash
-uv run --with coremltools python world.py
+uv run --with numpy --with pygame python world.py
 ```
 
-Pass `--duration N` to stop after N seconds. `python world.py --help` lists all flags.
+```
+$ uv run --with numpy python world.py --help
+beetle-brain  —  evolution on weights
 
-Without `coremltools` the brain runs on numpy. A plain-text report is always written on exit; add `--with plotly` for the HTML version. The first run compiles CoreML models and caches them to `build/`.
+Usage:
+  uv run --with coremltools --with pygame python world.py
+  uv run --with coremltools python world.py --new
+
+Libraries:
+  numpy          required — or use coremltools which includes it
+  coremltools    CoreML acceleration on Apple Silicon (includes numpy)
+  pygame         visual display
+  plotly         HTML report generation
+
+Runs forever by default. Omit pygame to run headless. Snapshot and reports written on exit.
+
+Options:
+  -h, --help           show this help message and exit
+  --duration [N]       stop after N seconds  (default: run forever)
+  --backend [BACKEND]  backend  (default: gpu)
+                         gpu, ane, cpu  — CoreML with that compute unit
+                         all            — CoreML with ANE + GPU + CPU together
+                         numpy          — no CoreML
+  --seed [N]           start fresh with seed N  (ignores snapshot)
+  --new                start fresh with a random seed  (ignores snapshot)
+  --fork [N]           load snapshot, run forward with a different RNG seed
+  --no-report          skip printing the report on exit
+```
 
 **Keys:** `SPACE` cycle speed (1×/5×/20×/100×) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
@@ -70,81 +93,14 @@ Life thrives at the boundary between states—rivers, coastlines, and thermal ve
 ## Layout
 
 `world.py` — entry point, pygame if available, headless otherwise  
-`sim/` — pure simulation logic: tick, sensing, predation, HGT, evolution, vents  
-`game/` — pygame loop, renderer, HUD — no sim logic crosses in  
+`sim/` — pure simulation logic: tick, sensing, predation, HGT, evolution, vents, phylo, stats  
+`game/` — pygame loop, renderer, HUD, snapshot — no sim logic crosses in  
 `brain/` — CoreML Elman RNN and fused sensing+brain kernel  
-`report.py` — plain-text and HTML report
+`scripts/` — report generation, bench, dev hooks
 
 ## Tuning the world
 
-Everything is in `config.toml`. Edit it, restart the sim. Sections: `[world]`, `[metabolism]`, `[hgt]`, `[evolution]`, `[aging]`, `[camouflage]`.
-
-## run report
-
-On exit (ESC, quit, or end of headless run) two files are written: `report_{commit}_{seed}_{tick}.html` and `report_{commit}_{seed}_{tick}.txt`.
-
-The HTML opens in any browser — fully offline. Charts: lineage tree, genome heatmap (20 genes × time), phase scatter, drain breakdown, hall of fame.
-
-The `.txt` covers the same run — trait means at exit, sparkline trajectories, drain by component, lineage river, strategy spread, key moments:
-
-```
-============================================================
-  beetle-brain · run report
-  9,822 ticks  ·  seed 869659  ·  pop 4096
-============================================================
-
-  max gen        44
-  max age     3,141
-  max eaten     969
-
-────────────────────────────────────────────────────────────
-  hall of fame
-────────────────────────────────────────────────────────────
-  longest survivor
-    age 3,141  ·  ate 151  ·  gen 26
-    size 8.74  speed 0.87  fov 72.7°  pred 1.23
-
-────────────────────────────────────────────────────────────
-  trajectory  (tick 0 → 3,905 → 8,405)
-────────────────────────────────────────────────────────────
-  pop             12.0 →  224.0 → 4096.0            ▁▁▁▁▁▂▄▇█
-  max_gen          2.0 →    8.0 →   44.0       ▁▁▁▁▁▁▂▃▄▄▅▅▆█
-  size             6.5 →    6.9 →    8.6    ▁▁▁▁▁▁▁▁▁▁▃▅▅▆▇▇█
-  speed            2.1 →    1.9 →    1.1  ▇▇██▇▇▇▆▆▆▅▅▅▆▅▅▄▁
-  fov°            66.3 →   59.4 →   68.5  ▇▇▄▁▂▁▂▂▂▃▃▄▁ ▂▁▃▆█
-  pred_ratio       1.3 →    1.3 →    1.3  ██▄▂▃▂▂▃▃▄▄▅▂ ▂▁▁▂
-  mut_rate         0.2 →    0.2 →    0.3  ▂▂▂ ▁ ▁▂▂▃▄▅▃▂▄▄▅█▇
-  n_rays           4.8 →    5.4 →    4.9    ▁▄▅▅▆▇████▇▅▄▄▅▅▁
-  active_neur     12.8 →   13.2 →   12.6  ▂▂▄ ▂ ▁▄▅▄▆█▄▂▃▃▆▅▁
-
-  drain / tick (mean at end)
-    kleiber      0.0504    ▁▁▁▁▁▁▁▁▁▁▃▅▅▆▇▇█
-    speed        0.0072  ▇▇█▇▆▆▆▆▅▅▄▄▅▅▄▄▃▁
-    size         0.0225    ▁▁▁▁▁▁▁▁▁▁▃▄▅▆▇▇█
-    sensing      0.0021  ██▇▂▂▁▂▂▃▄▄▄▃▁▂  ▁▂
-    brain        0.0093  ▂▂▄▁▂ ▁▄▅▄▆█▄▂▃▃▆▅▂
-
-────────────────────────────────────────────────────────────
-  lineage river  (147 total)
-────────────────────────────────────────────────────────────
-  6           born tick      0  share    7%  final    91  ▁▁▂▃▄▆▇█▅▄█▅▅
-  393         born tick  5,905  share    5%  final   274  ▁▃▇█
-  299         born tick  5,905  share    5%  final   268  ▁▁▃▇█
-  161         born tick  4,905  share    4%  final   247  ▁▂▃▅█
-  1408        born tick  6,905  share    4%  final   247  ▂▇█
-
-────────────────────────────────────────────────────────────
-  strategy spread at final snapshot  — spread suggests multiple strategies
-────────────────────────────────────────────────────────────
-  size        mean  8.65  std 0.19  range 8.07–8.98
-  pred_ratio  mean  1.26  std 0.13  range 1.06–1.77
-  speed       mean  1.09
-
-  key moments
-    tick  6,405  size crossed 80% of range
-    tick  8,405  size crossed 90% — ceiling locked
-    tick  4,905  fastest size change (6.85→7.35)
-```
+Everything is in `config.toml` — edit it, restart the sim. Sections: `[world]`, `[metabolism]`, `[hgt]`, `[evolution]`, `[aging]`, `[camouflage]`
 
 ## Performance
 
