@@ -164,10 +164,23 @@ def _render_text(text: str, font, color: tuple):
         # TV body: full width, below antennae
         by = ay;  bh = sz - ay
         pygame.draw.rect(res, white, (0, by, sz, bh), border_radius=2)
-        # screen: upper ~65% of body, nearly full width
+        # screen: upper ~65% of body, nearly full width — SMPTE color bars
         sl = 1
         sh = int(bh * 0.64)
-        pygame.draw.rect(res, dark, (sl, by + sl, sz - sl*2, sh), border_radius=1)
+        bars = [
+            (255, 255, 255),  # white
+            (255, 255,   0),  # yellow
+            (  0, 255, 255),  # cyan
+            (  0, 210,   0),  # green
+            (255,   0, 255),  # magenta
+            (255,   0,   0),  # red
+            (  0,   0, 255),  # blue
+        ]
+        sw = sz - sl * 2
+        for i, bc in enumerate(bars):
+            bx0 = sl + int(i * sw / len(bars))
+            bx1 = sl + int((i + 1) * sw / len(bars))
+            pygame.draw.rect(res, bc, (bx0, by + sl, bx1 - bx0, sh))
         # thin divider between screen and VHS section
         dy = by + sl + sh + 1
         pygame.draw.line(res, mid, (1, dy), (sz-2, dy))
