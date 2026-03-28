@@ -75,8 +75,8 @@ def _key_label_x_font():
 _LEGEND_N = 9
 _LEGEND_COLORS = [
     (
-        tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / (_LEGEND_N - 1) * 0.75, 0.75, 0.95)),
-        tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / (_LEGEND_N - 1) * 0.75, 0.60, 0.58)),
+        tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / (_LEGEND_N - 1) * 0.75, 0.80, 0.52)),
+        tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / (_LEGEND_N - 1) * 0.75, 0.65, 0.30)),
     )
     for i in range(_LEGEND_N)
 ]
@@ -682,7 +682,8 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         f = f or font
         hot, dim = _LEGEND_COLORS[i]
         fg = hot if active else dim
-        ts = _render_text(label, f, fg)
+        ts  = _render_text(label, f, fg)
+        shd = _render_text(label, f, (0, 0, 0))
         tw, th = ts.get_size()
         w = tw + PX2 * 2
         if active:
@@ -690,7 +691,9 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
             pygame.draw.rect(surf, fill,
                              pygame.Rect(lx, text_y - PY2, w, th + PY2 * 2),
                              border_radius=4)
-        surf.blit(ts, (lx + PX2, text_y))
+        # 1px drop shadow for legibility at any color/brightness
+        surf.blit(shd, (lx + PX2 + 1, text_y + 1))
+        surf.blit(ts,  (lx + PX2,     text_y))
         return w
 
     def _pill_row(items, text_y):
