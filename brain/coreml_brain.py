@@ -19,7 +19,7 @@ Hunger, spatial memory, fear, anticipation — whatever helps survival emerges.
 Falls back to numpy einsum if CoreML unavailable.
 """
 from __future__ import annotations
-import json, os, threading, time
+import json, os, time
 from pathlib import Path
 import numpy as np
 
@@ -59,10 +59,8 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
         print("[Brain] coremltools not available — numpy fallback")
         return False
 
-    threading.Thread(target=_load_or_compile,
-                     args=(max_pop, n_inputs, n_hidden, n_outputs),
-                     daemon=True).start()
-    return False  # numpy fallback until thread finishes
+    _load_or_compile(max_pop, n_inputs, n_hidden, n_outputs)
+    return _use_coreml
 
 
 def _load_or_compile(max_pop, n_inputs, n_hidden, n_outputs):
@@ -122,7 +120,7 @@ def _load_or_compile(max_pop, n_inputs, n_hidden, n_outputs):
         _use_coreml = True
         print(f" done ({time.time()-t0:.1f}s)")
     except Exception as e:
-        print(f" FAILED: {e} — numpy fallback")
+        print(f" FAILED: {e} — falling back to numpy")
 
 
 def run_brain(x: np.ndarray, W1: np.ndarray, W2: np.ndarray, Wh: np.ndarray,
@@ -142,7 +140,7 @@ def run_brain(x: np.ndarray, W1: np.ndarray, W2: np.ndarray, Wh: np.ndarray,
     if x.shape[0] == 0:
         return np.empty((0, _n_hid), dtype=np.float32), np.empty((0, _n_out), dtype=np.float32)
 
-    if _use_coreml and _model is not None:
+    if _model is not None:
         n = x.shape[0]
         h_chunks, o_chunks = [], []
         for s in range(0, n, _max_pop):

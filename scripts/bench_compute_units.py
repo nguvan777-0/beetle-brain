@@ -57,10 +57,6 @@ if "--worker" in sys.argv:
         print(f"[bench] population tiled {n} → {MAX_POP}, positions randomised")
 
     init_ane()
-    import brain.coreml_sense_brain as _sb
-    t_wait = time.time()
-    while not _sb._use_coreml and time.time() - t_wait < 300:
-        time.sleep(0.05)
 
     ticks = 0
     t0    = time.time()
@@ -108,7 +104,7 @@ def _deps(compute_unit):
 def _run_world(compute_unit, duration):
     cmd = [
         "uv", "run", *_deps(compute_unit),
-        "python", "world.py", str(duration), "--new", "--seed", "12345", "--bench",
+        "python", "world.py", str(duration), "--new", "--seed", "12345",
     ]
     r = subprocess.run(cmd, cwd=ROOT, env=_env(compute_unit),
                        capture_output=True, text=True)

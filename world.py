@@ -54,8 +54,6 @@ parser.add_argument('--fork',  type=int, metavar='X',
                     help='load snapshot but run forward with a different RNG seed X')
 parser.add_argument('--backend', metavar='BACKEND', default='CPU_AND_GPU',
                     help='CoreML backend: gpu (default), ane, all, cpu, numpy  — full names also accepted')
-parser.add_argument('--bench', action='store_true',
-                    help='wait for CoreML to finish compiling before starting the timer')
 args = parser.parse_args()
 
 _BACKENDS = {
@@ -117,12 +115,6 @@ else:
     extinct     = False
     next_sample = tick + SAMPLE_EVERY
     next_report = tick + REPORT_EVERY
-
-    if args.bench:
-        import brain.coreml_sense_brain as _sb
-        t_wait = time.time()
-        while not _sb._use_coreml and time.time() - t_wait < 300:
-            time.sleep(0.05)
 
     t0          = time.time()
 

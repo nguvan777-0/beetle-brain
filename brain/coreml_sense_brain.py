@@ -17,7 +17,7 @@ bounded to 4x instead of the 293x worst case of a single MAX_POP model.
 Fallback: numpy sense + CoreML brain when compilation fails.
 """
 from __future__ import annotations
-import json, os, threading, time
+import json, os, time
 from pathlib import Path
 import numpy as np
 
@@ -57,8 +57,8 @@ def _compute_unit():
 def init_sense_brain() -> bool:
     if not _HAS_CT:
         return False
-    threading.Thread(target=_load_or_compile, daemon=True).start()
-    return False
+    _load_or_compile()
+    return _use_coreml
 
 
 def _load_or_compile():
@@ -298,7 +298,7 @@ def run_sense_brain(pop: dict, food: np.ndarray) -> tuple[np.ndarray, np.ndarray
     does raycasting + RNN on GPU. Bucket models keep padding waste to ≤4x.
     Falls back to numpy sense + CoreML brain if the models failed to load.
     """
-    if _use_coreml and _models:
+    if _models:
         return _predict(pop, food)
     from sim.grid.constants import GW as _GW, GH as _GH, GRID_SCALE as _GS
     from sim.sensing import sense

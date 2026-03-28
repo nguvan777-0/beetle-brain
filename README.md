@@ -148,17 +148,17 @@ The `.txt` covers the same run — trait means at exit, sparkline trajectories, 
 
 ## Performance
 
-Measured on Apple Silicon (Mac mini M4), headless. Tick rates exclude compile time.
+Measured on Apple Silicon (Mac mini M4), headless
 
 | `--backend` | hardware | compile | start (pop~16) | mature (pop~1400) | maxpop (4096) |
 |-------------|----------|---------|---------------|-------------------|---------------|
-| `ane`       | CoreML → ANE      | ~30s  | ~1000 t/s | **~192 t/s** | — |
-| `gpu` ✓     | CoreML → GPU      | ~0.4s | ~1000 t/s | ~47 t/s | ~24 t/s |
-| `numpy`     | numpy (no CoreML) | ~0.4s | ~1000 t/s | ~45 t/s | ~23 t/s |
-| `cpu`       | CoreML → CPU      | ~0.4s | ~1250 t/s | ~42 t/s | ~14 t/s |
+| `ane`       | CoreML → ANE         | ~30s  | ~1000 t/s | **~192 t/s** | — |
+| `gpu` ✓     | CoreML → GPU         | ~0.4s | ~1000 t/s | ~47 t/s | ~24 t/s |
+| `numpy`     | numpy (no CoreML)    | —     | ~1000 t/s | ~45 t/s | ~23 t/s |
+| `cpu`       | CoreML → CPU         | ~0.4s | ~1250 t/s | ~42 t/s | ~14 t/s |
 | `all`       | CoreML → CPU+GPU+ANE | ~22s  | ~1000 t/s | ~40 t/s | ~18 t/s |
 
-`gpu` is the default — instant startup, consistent across all population sizes. `ane` is 4× faster at mature populations but always costs ~30s to compile (the ANE model cache is unreliable); only worth it for long runs. `cpu` uses CoreML's optimised CPU kernels (faster than numpy at small populations). `all` routes across all hardware simultaneously but scheduling overhead makes it the slowest option. CoreML models load in a background thread; the sim starts on numpy and switches automatically.
+`gpu` is the default — fast compile, consistent across all population sizes. `ane` is 4× faster at mature populations but costs ~30s every process start (the ANE model cache is unreliable); only worth it for long runs. `cpu` uses CoreML's optimised CPU kernels, faster than numpy at small populations. `all` routes across all hardware simultaneously but scheduling overhead makes it the slowest option.
 
 
 ## License
