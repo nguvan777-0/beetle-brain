@@ -52,9 +52,26 @@ parser.add_argument('--new',   action='store_true',
                     help='start a new world with a random seed  (ignores any saved snapshot)')
 parser.add_argument('--fork',  type=int, metavar='X',
                     help='load snapshot but run forward with a different RNG seed X')
+parser.add_argument('--backend', metavar='BACKEND', default='CPU_AND_GPU',
+                    help='CoreML backend: gpu (default), ane, all, cpu, numpy  — full names also accepted')
 parser.add_argument('--bench', action='store_true',
                     help='wait for CoreML to finish compiling before starting the timer')
 args = parser.parse_args()
+
+_BACKENDS = {
+    'gpu':         'CPU_AND_GPU',
+    'cpu_and_gpu': 'CPU_AND_GPU',
+    'ane':         'CPU_AND_NE',
+    'cpu_and_ne':  'CPU_AND_NE',
+    'cpu':         'CPU_ONLY',
+    'cpu_only':    'CPU_ONLY',
+    'all':         'ALL',
+    'numpy':       'numpy',
+}
+_backend = _BACKENDS.get(args.backend.lower().replace('-', '_'))
+if _backend is None:
+    parser.error(f"unknown backend {args.backend!r}  —  valid: gpu, ane, all, cpu, numpy")
+args.backend = _backend
 
 try:
     import pygame
@@ -64,7 +81,7 @@ except ImportError:
 
 if _has_pygame:
     from game.main import main
-    main(new=args.new, seed=args.seed, fork=args.fork)
+    main(new=args.new, seed=args.seed, fork=args.fork, compute_units=args.backend)
 else:
     import atexit
     import signal
@@ -77,6 +94,9 @@ else:
     DURATION     = args.duration if args.duration else None  # 0 means run forever
     REPORT_EVERY = 500
 
+    import os
+    if args.backend != 'numpy':
+        os.environ['BEETLE_COMPUTE_UNITS'] = args.backend
     init_ane()
 
     force_new = (args.new or args.seed is not None) and args.fork is None

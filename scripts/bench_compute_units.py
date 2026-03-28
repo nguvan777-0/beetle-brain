@@ -210,7 +210,7 @@ print(sep)
 for (label, load_str, load_s,
      start_tps, start_pop,
      mature_tps, mature_pop,
-     max_tps) in sorted(rows, key=lambda r: -(r[3] or 0)):
+     max_tps) in sorted(rows, key=lambda r: -(r[5] or 0)):
     marker = " ✓" if label == "CPU_AND_GPU" else "  "
     print(f"{label + marker:<{col_w}}  {load_str:>8}  "
           f"{_fmt(start_tps):>{col_tps}}  "

@@ -37,7 +37,10 @@ def _pca_proj(W_body):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def main(new=False, seed=None, fork=None):
+def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
+    import os
+    if compute_units != 'numpy':
+        os.environ['BEETLE_COMPUTE_UNITS'] = compute_units
     init_ane()
 
     pygame.init()
