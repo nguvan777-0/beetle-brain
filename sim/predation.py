@@ -1,4 +1,4 @@
-"""Predation: O(N) patch-based kill detection with energy conservation."""
+"""Predation: O(N) patch-based prey detection with energy conservation."""
 import numpy as np
 from sim.config import SIZE_MAX, CAMO_BONUS, CAMO_ENABLED
 from sim.grid.constants import PRED_R_PIX
@@ -7,11 +7,11 @@ from sim.grid.constants import PRED_R_PIX
 def predation(pop, idx_grid, j_idx):
     """
     For each wight, sample a (2*PRED_R_PIX+1)² patch of idx_grid to find
-    nearby candidates. Kill prey that are smaller and in range.
+    nearby candidates. Hunt prey that are smaller and in range.
 
     j_idx: (N, patch²) int32 pre-computed by tick — shared with contact_hgt.
-    Returns (killed mask (N,), prey_gain (N,), pred_idx, prey_idx).
-    Energy is split among all predators that kill the same prey.
+    Returns (hunted mask (N,), prey_gain (N,), pred_idx, prey_idx).
+    Energy is split among all hunters that hunt the same prey.
     """
     N = len(pop['x'])
     if N <= 1:
@@ -30,18 +30,18 @@ def predation(pop, idx_grid, j_idx):
 
     in_range = dist < (pop['size'][:, None] + detect_r[j_safe])
     bigger   = pop['size'][:, None] > pop['size'][j_safe] * pop['pred_ratio'][:, None]
-    kills    = valid & in_range & bigger
+    hunts    = valid & in_range & bigger
 
-    # split prey energy among all killers of the same prey
-    prey_kill_counts = np.zeros(N, dtype=np.float32)
-    np.add.at(prey_kill_counts, j_idx[kills], 1.0)
-    counts_per_slot  = np.where(kills, prey_kill_counts[j_safe].clip(min=1), 1.0)
-    prey_gain = (kills * pop['energy'][j_safe] / counts_per_slot).sum(axis=1) * 0.3
+    # split prey energy among all hunters of the same prey
+    prey_hunt_counts = np.zeros(N, dtype=np.float32)
+    np.add.at(prey_hunt_counts, j_idx[hunts], 1.0)
+    counts_per_slot  = np.where(hunts, prey_hunt_counts[j_safe].clip(min=1), 1.0)
+    prey_gain = (hunts * pop['energy'][j_safe] / counts_per_slot).sum(axis=1) * 0.3
 
-    killed = np.zeros(N, dtype=bool)
-    killed[j_idx[kills]] = True
+    hunted = np.zeros(N, dtype=bool)
+    hunted[j_idx[hunts]] = True
 
-    pred_idx, slot_idx = np.where(kills)
+    pred_idx, slot_idx = np.where(hunts)
     prey_idx           = j_idx[pred_idx, slot_idx]
 
-    return killed, prey_gain, pred_idx, prey_idx
+    return hunted, prey_gain, pred_idx, prey_idx

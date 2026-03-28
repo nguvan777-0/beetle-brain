@@ -33,7 +33,7 @@ def save_snapshot(world, tick, history, hall_fame, stats=None):
         x=pop['x'], y=pop['y'], angle=pop['angle'], energy=pop['energy'],
         W_body=pop['W_body'], W1=pop['W1'], W2=pop['W2'], Wh=pop['Wh'], b1=pop['b1'], b2=pop['b2'],
         h_state=pop['h_state'],
-        generation=pop['generation'], age=pop['age'], eaten=pop['eaten'],
+        generation=pop['generation'], age=pop['age'], grazed=pop['grazed'], hunts=pop['hunts'],
         lineage_id=pop['lineage_id'], individual_id=pop['individual_id'],
         food=food, vents=vents, tick=np.array([tick], dtype=np.int32),
         hist=hist_arr,
@@ -77,7 +77,11 @@ def load_snapshot(rng, path=SNAPSHOT_PATH):
         **t,
         'generation':  d['generation'].astype(np.int32),
         'age':         d['age'].astype(np.int32),
-        'eaten':       d['eaten'].astype(np.int32),
+        'grazed':      (d['grazed'].astype(np.int32) if 'grazed' in d
+                        else d['eaten'].astype(np.int32) if 'eaten' in d
+                        else np.zeros(n, dtype=np.int32)),
+        'hunts':       (d['hunts'].astype(np.int32) if 'hunts' in d
+                        else np.zeros(n, dtype=np.int32)),
         'h_state':     (d['h_state'].astype(np.float32) if 'h_state' in d
                         else np.zeros((n, N_HIDDEN), dtype=np.float32)),
         'lineage_id':  (d['lineage_id'].astype(np.int32) if 'lineage_id' in d

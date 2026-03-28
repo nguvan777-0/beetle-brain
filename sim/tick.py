@@ -105,7 +105,7 @@ def tick(world, rng):
                 gain_per_org = np.bincount(actual_eater_ids, weights=gain_per_event, minlength=len(pop['x'])).astype(np.float32)
                 
                 pop['energy'] = np.minimum(energy_max, pop['energy'] + gain_per_org)
-                pop['eaten'] += (np.bincount(actual_eater_ids, minlength=len(pop['x'])) > 0).astype(np.int32)
+                pop['grazed'] += (np.bincount(actual_eater_ids, minlength=len(pop['x'])) > 0).astype(np.int32)
                 
                 # Filter remaining food
                 eaten_food_mask = np.zeros(len(food), dtype=bool)
@@ -120,16 +120,16 @@ def tick(world, rng):
     col_idx = (ox[:, None, None] + _PR_OFF[None, None, :]) % GW
     j_idx   = idx_grid[row_idx, col_idx].reshape(len(pop['x']), -1)
 
-    killed, prey_gain, pred_idx, prey_idx = predation(pop, idx_grid, j_idx)
+    hunted, prey_gain, pred_idx, prey_idx = predation(pop, idx_grid, j_idx)
     pop['energy'] = np.minimum(energy_max, pop['energy'] + prey_gain)
-    pop['eaten'] += (prey_gain > 0).astype(np.int32)
+    pop['hunts'] += (prey_gain > 0).astype(np.int32)
 
     # ── horizontal gene transfer ──────────────────────────────────────────────
     eat_hgt(pop, pred_idx, prey_idx, rng)
     contact_hgt(pop, j_idx, rng)
 
     # ── death ────────────────────────────────────────────────────────────────
-    alive = (pop['energy'] > 0) & (~killed)
+    alive = (pop['energy'] > 0) & (~hunted)
 
     # ── breed ────────────────────────────────────────────────────────────────
     can_breed = alive & (pop['energy'] >= pop['breed_at'])

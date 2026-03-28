@@ -37,7 +37,8 @@ def make_pop(n, rng, phylo_state):
         **t,
         'generation':    np.zeros(n, dtype=np.int32),
         'age':           np.zeros(n, dtype=np.int32),
-        'eaten':         np.zeros(n, dtype=np.int32),
+        'grazed':        np.zeros(n, dtype=np.int32),
+        'hunts':         np.zeros(n, dtype=np.int32),
         'h_state':       np.zeros((n, N_HIDDEN), dtype=np.float32),
         'lineage_id':    np.arange(n, dtype=np.int32),
         'individual_id': np.arange(n, dtype=np.int32),   # founders are 0..n-1

@@ -113,7 +113,7 @@ else:
     import signal
     import time
     import numpy as np
-    from sim import new_world, tick as sim_tick, init_ane
+    from sim import new_world, tick as sim_tick, init_ane, phylo
     from sim.stats import StatsCollector, SAMPLE_EVERY
     from game.snapshot import save_snapshot, load_snapshot
 
@@ -147,8 +147,10 @@ else:
     t0          = time.time()
 
     # streaming analytics state
-    _prev = {'sz': None, 'rays': None, 'neur': None, 'pop': None}
+    _prev = {'sz': None, 'rays': None, 'neur': None, 'neur_reported': None,
+             'pop': None, 'pred_ratio': None, 'hunters_pct': None, 'max_hunts': None}
     _flags = set()  # one-shot events already printed
+    _GEN_MILESTONES = [10, 50, 100, 500, 1000, 5000, 10000]
 
     def _on_exit():
         elapsed = time.time() - t0
@@ -160,7 +162,7 @@ else:
                            phylo_state=world['phylo'], extinct=extinct,
                            seed=world.get('seed'))
         from pathlib import Path
-        from reports.report import generate, generate_text, generate_summary, _report_stem
+        from scripts.report import generate, generate_text, generate_summary, _report_stem
         generate(stats, world=world if not extinct else None, tick=tick)
         txt_path = _report_stem(stats) + ".txt"
         if not Path(txt_path).exists():
@@ -175,7 +177,7 @@ else:
     fork   = f"  fork rng {args.fork}" if args.fork is not None else ""
     print(f"seed {world['seed']}{resume}{fork}")
     print("─" * 72)
-    print(f"{'tick':>8} {'pop':>5} {'gen':>5} {'age':>7} {'ate':>5} {'spd':>5} {'sz':>4} {'rays':>5} {'neur':>5}  elapsed")
+    print(f"{'tick':>8} {'pop':>5} {'gen':>5} {'age':>7} {'hunt':>5} {'spd':>5} {'sz':>4} {'rays':>5} {'neur':>5}  elapsed")
     print("─" * 72)
 
     while True:
@@ -210,11 +212,20 @@ else:
             rays = float(pop['n_rays'].mean()) if 'n_rays' in pop else 0.0
             neur = float(pop.get('active_neurons', np.zeros(N)).mean())
             print(f"{tick:8d} {N:5d} {int(pop['generation'].max()):5d} "
-                  f"{int(pop['age'].max()):7d} {int(pop['eaten'].max()):5d} "
+                  f"{int(pop['age'].max()):7d} {int(pop['hunts'].max()):5d} "
                   f"{pop['speed'].mean():5.2f} {sz:4.1f} {rays:5.1f} {neur:5.1f}  {elapsed:.1f}s")
 
             # streaming analytics — one-shot flags
             notes = []
+            max_gen = int(pop['generation'].max())
+
+            # generation milestones
+            for g in _GEN_MILESTONES:
+                if max_gen >= g and f'gen{g}' not in _flags:
+                    notes.append(f"generation {g:,}")
+                    _flags.add(f'gen{g}')
+
+            # size
             sz_pct = (sz - SIZE_MIN) / (SIZE_MAX - SIZE_MIN)
             if sz_pct >= 0.9 and 'sz90' not in _flags:
                 notes.append("size locked — 90% of range")
@@ -223,34 +234,115 @@ else:
                 notes.append("size crossing 80% of range")
                 _flags.add('sz80')
 
+            # vision
             if rays < 1.0 and 'rays0' not in _flags and _prev['rays'] is not None:
                 notes.append("vision collapsed — mean n_rays < 1")
                 _flags.add('rays0')
             elif _prev['rays'] is not None and rays < _prev['rays'] * 0.7 and 'rays_drop' not in _flags:
                 notes.append(f"vision dropping fast  {_prev['rays']:.1f} → {rays:.1f}")
                 _flags.add('rays_drop')
+            elif ('rays_drop' in _flags or 'rays0' in _flags) and _prev['rays'] is not None and rays > _prev['rays'] * 1.5 and 'vision_recovered' not in _flags:
+                notes.append(f"vision recovering  {_prev['rays']:.1f} → {rays:.1f} rays")
+                _flags.add('vision_recovered')
 
-            if _prev['neur'] is not None:
-                d = neur - _prev['neur']
-                if d > 2.0 and 'neur_up' not in _flags:
-                    notes.append(f"brain growing  +{d:.1f} neurons")
-                    _flags.add('neur_up')
-                elif d < -2.0 and 'neur_dn' not in _flags:
+            # brain — repeatable: fires again whenever it moves >2 from last reported value
+            if _prev['neur_reported'] is None:
+                _prev['neur_reported'] = neur
+            else:
+                d = neur - _prev['neur_reported']
+                if d > 2.0:
+                    notes.append(f"brain expanding  +{d:.1f} neurons")
+                    _prev['neur_reported'] = neur
+                elif d < -2.0:
                     notes.append(f"brain pruning  {d:.1f} neurons")
-                    _flags.add('neur_dn')
+                    _prev['neur_reported'] = neur
 
+            # population
             if _prev['pop'] is not None and N < _prev['pop'] * 0.5:
                 notes.append(f"population crash  {_prev['pop']} → {N}")
             elif _prev['pop'] is not None and N > _prev['pop'] * 2.0:
                 notes.append(f"population boom  {_prev['pop']} → {N}")
+            if N <= 5 and 'pop_brink' not in _flags:
+                notes.append(f"population on the brink — {N} wights remain")
+                _flags.add('pop_brink')
+            elif N <= 10 and 'pop_critical' not in _flags:
+                notes.append(f"population critical — {N} wights remain")
+                _flags.add('pop_critical')
+
+            # lineage concentration
+            depth   = max(4, max_gen // 3)
+            anc_ids = phylo.ancestor_at(pop['individual_id'], depth, world['phylo'])
+            _, anc_counts = np.unique(anc_ids, return_counts=True)
+            top_pct = float(anc_counts.max()) / N if N > 0 else 0.0
+            if top_pct >= 0.9 and 'lineage90' not in _flags:
+                notes.append(f"one lineage remains — {top_pct*100:.0f}% share one ancestor")
+                _flags.add('lineage90')
+            elif top_pct >= 0.7 and 'lineage70' not in _flags:
+                notes.append(f"one lineage dominates — {top_pct*100:.0f}% share one ancestor")
+                _flags.add('lineage70')
+
+            # grazing / hunting analytics
+            max_hunts_now  = int(pop['hunts'].max())
+            max_grazed_now = int(pop['grazed'].max())
+            hunters_now    = int((pop['hunts'] > 0).sum())
+            hunters_pct    = hunters_now / N if N > 0 else 0.0
+            grazers_now    = int((pop['grazed'] > 0).sum())
+            pred_ratio     = float(pop['hunts'].sum()) / max(float(pop['grazed'].sum()) + float(pop['hunts'].sum()), 1)
+
+            # predator milestones — single wight racking up hunts
+            if max_hunts_now >= 10 and 'apex10' not in _flags:
+                notes.append(f"apex predator — {max_hunts_now} hunts by one wight")
+                _flags.add('apex10')
+            elif max_hunts_now >= 5 and 'apex5' not in _flags:
+                notes.append(f"a predator emerges — {max_hunts_now} hunts by one wight")
+                _flags.add('apex5')
+            elif (_prev['max_hunts'] is not None and max_hunts_now > _prev['max_hunts']
+                  and max_hunts_now > 0 and max_hunts_now % 10 == 0):
+                notes.append(f"predation escalating — top hunter at {max_hunts_now} hunts")
+
+            # predation evolving through the population
+            if hunters_pct >= 0.5 and 'pred_dominant' not in _flags and max_hunts_now > 0:
+                notes.append(f"predation dominant — {hunters_pct*100:.0f}% of wights have hunted")
+                _flags.add('pred_dominant')
+            elif hunters_pct >= 0.25 and 'pred_evolving' not in _flags and max_hunts_now > 0:
+                notes.append(f"predation evolving — {hunters_pct*100:.0f}% of wights carry the trait")
+                _flags.add('pred_evolving')
+
+            # arms race — predation rising while grazing also rises
+            if (_prev['pred_ratio'] is not None and pred_ratio > _prev['pred_ratio'] + 0.15
+                  and max_grazed_now > 0 and 'arms_race' not in _flags):
+                notes.append(f"arms race — predation up {_prev['pred_ratio']*100:.0f}% → {pred_ratio*100:.0f}% of feeding")
+                _flags.add('arms_race')
+
+            # predation retreating — hunters were active but collapse
+            if (_prev['hunters_pct'] is not None and _prev['hunters_pct'] > 0.1
+                  and hunters_pct < _prev['hunters_pct'] * 0.3 and 'pred_retreats' not in _flags):
+                notes.append(f"predation retreating — hunters down {_prev['hunters_pct']*100:.0f}% → {hunters_pct*100:.0f}%")
+                _flags.add('pred_retreats')
+
+            # foraging milestones — one wight eating a lot of food
+            if max_grazed_now >= 50 and 'grazer50' not in _flags:
+                notes.append(f"spawning grazer — {max_grazed_now} food eaten by one wight")
+                _flags.add('grazer50')
+            elif max_grazed_now >= 20 and 'grazer20' not in _flags:
+                notes.append(f"a grazer emerges — {max_grazed_now} food eaten by one wight")
+                _flags.add('grazer20')
+
+            # no predators remain — widespread foraging, no hunters
+            if grazers_now > N * 0.8 and hunters_now == 0 and 'grazers_prevail' not in _flags and max_grazed_now > 5:
+                notes.append(f"no predators remain — {grazers_now}/{N} foraging")
+                _flags.add('grazers_prevail')
 
             for note in notes:
                 print(f"          ↳ {note}")
 
-            _prev['sz']   = sz
-            _prev['rays'] = rays
-            _prev['neur'] = neur
-            _prev['pop']  = N
+            _prev['sz']          = sz
+            _prev['rays']        = rays
+            _prev['neur']        = neur
+            _prev['pop']         = N
+            _prev['pred_ratio']  = pred_ratio
+            _prev['hunters_pct'] = hunters_pct
+            _prev['max_hunts']   = max_hunts_now
             next_report  += REPORT_EVERY
 
     elapsed = time.time() - t0

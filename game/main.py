@@ -153,9 +153,9 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
 
             # hall of fame
             if len(pop['x']) > 0:
-                for i in np.where(pop['eaten'] > 0)[0]:
+                for i in np.where(pop['hunts'] > 0)[0]:
                     hall_fame.append((
-                        int(pop['eaten'][i]), int(pop['generation'][i]),
+                        int(pop['hunts'][i]), int(pop['generation'][i]),
                         int(pop['age'][i]),
                         float(pop['speed'][i]), float(pop['fov'][i]),
                         float(pop['size'][i]), float(DRAIN_SCALE * pop['size'][i]**0.75),

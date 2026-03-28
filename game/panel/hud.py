@@ -295,7 +295,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
     N = len(pop['x'])
     if N > 0:
-        txt(f"pop {N}  max gen {int(pop['generation'].max())}  max age {int(pop['age'].max())}  max ate {int(pop['eaten'].max())}", font_sm, (160, 200, 160))
+        txt(f"pop {N}  max gen {int(pop['generation'].max())}  max age {int(pop['age'].max())}  max hunts {int(pop['hunts'].max())}", font_sm, (160, 200, 160))
         sep()
 
     # ── stacked area: phylo sub-lineage populations over time ────────────
@@ -334,9 +334,9 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
 
     if hall_fame:
         txt("HALL OF FAME", font, (255, 210, 80))
-        for i, (eaten, gen, age, spd, fov, sz, drn, r, g, b) in enumerate(hall_fame):
+        for i, (hunts, gen, age, spd, fov, sz, drn, r, g, b) in enumerate(hall_fame):
             pygame.draw.circle(surf, (int(r), int(g), int(b)), (px + 18, y + 6), 5)
-            txt(f"  #{i+1} ate:{eaten:3d} g{gen} spd{spd:.1f} sz{sz:.1f}", font_sm, (220, 200, 140))
+            txt(f"  #{i+1} hunts:{hunts:3d} g{gen} spd{spd:.1f} sz{sz:.1f}", font_sm, (220, 200, 140))
         sep()
 
     if sel_idx is not None and sel_idx < N:
@@ -351,7 +351,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
             f"  lineage {lid}",
             f"  gen    {int(pop['generation'][sel_idx])}",
             f"  age    {int(pop['age'][sel_idx]):,}",
-            f"  eaten  {int(pop['eaten'][sel_idx])}",
+            f"  hunts  {int(pop['hunts'][sel_idx])}",
             f"  energy {pop['energy'][sel_idx]:.0f}",
             f"  speed  {pop['speed'][sel_idx]:.2f}",
             f"  fov    {np.degrees(pop['fov'][sel_idx]):.0f}°",

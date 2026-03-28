@@ -16,7 +16,7 @@ Requires Python 3.11+ and numpy. `coremltools` and `pygame` are optional — dro
 uv run --with coremltools --with pygame python world.py
 ```
 
-To run headless (default 30s; pass a duration in seconds to override):
+To run headless (runs until Ctrl-C or extinction, then writes a report):
 
 ```bash
 uv run --with coremltools python world.py

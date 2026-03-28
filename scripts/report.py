@@ -102,11 +102,13 @@ def generate_text(stats, path=None, world=None, tick=None):
 
     if samples:
         max_age   = max(s['max_age']   for s in samples)
-        max_eaten = max(s['max_eaten'] for s in samples)
+        max_hunts  = max(s['max_hunts']  for s in samples)
+        max_grazed = max(s['max_grazed'] for s in samples)
         max_gen   = max(s['max_gen']   for s in samples)
         w(f"\n  max gen    {max_gen:>6}")
         w(f"  max age    {max_age:>6,}")
-        w(f"  max eaten  {max_eaten:>6}")
+        w(f"  max hunts  {max_hunts:>6}")
+        w(f"  max grazed {max_grazed:>6}")
 
     # snapshot traits, vents, oldest wight — only when pop is available
     if world is not None and tick is not None:
@@ -178,19 +180,20 @@ def generate_text(stats, path=None, world=None, tick=None):
 
     # hall of fame
     hof_entries = [
-        ('longest survivor', hof.get('longest')),
-        ('most kills',       hof.get('killer')),
-        ('eldest lineage',   hof.get('eldest')),
+        ('longest survivor', hof.get('longest'),  'age',    lambda w: f"age {w['age']:,}"),
+        ('most hunts',       hof.get('hunter'),   'hunts',  lambda w: f"hunts {w['hunts']}"),
+        ('most grazed',      hof.get('grazer'),   'grazed', lambda w: f"grazed {w['grazed']}"),
+        ('eldest lineage',   hof.get('eldest'),   'gen',    lambda w: f"gen {w['generation']}"),
     ]
-    if any(v for _, v in hof_entries):
+    if any(wight for _, wight, _, _ in hof_entries):
         w(f"\n{'─'*60}")
         w("  hall of fame")
         w(f"{'─'*60}")
-        for title, wight in hof_entries:
+        for title, wight, _, metric_fn in hof_entries:
             if wight is None:
                 continue
             w(f"  {title}")
-            w(f"    age {wight['age']:,}  ·  ate {wight['eaten']}  ·  gen {wight['generation']}")
+            w(f"    {metric_fn(wight)}  ·  age {wight['age']:,}  ·  gen {wight['generation']}")
             w(f"    size {wight['size']:.2f}  speed {wight['speed']:.2f}  "
               f"fov {wight['fov_deg']:.1f}°  pred {wight['pred_ratio']:.2f}")
 
@@ -342,22 +345,23 @@ def generate_summary(stats, world=None, tick=None):
 
     if samples:
         max_age   = max(s['max_age']   for s in samples)
-        max_eaten = max(s['max_eaten'] for s in samples)
+        max_hunts  = max(s['max_hunts']  for s in samples)
+        max_grazed = max(s['max_grazed'] for s in samples)
         max_gen   = max(s['max_gen']   for s in samples)
-        w(f"\n  gen {max_gen}  ·  age {max_age:,}  ·  eaten {max_eaten}")
+        w(f"\n  gen {max_gen}  ·  age {max_age:,}  ·  hunts {max_hunts}  ·  grazed {max_grazed}")
 
     hof_entries = [
-        ('longest survivor', hof.get('longest')),
-        ('most kills',       hof.get('killer')),
-        ('eldest lineage',   hof.get('eldest')),
+        ('longest survivor', hof.get('longest'),  lambda w: f"age {w['age']:,}"),
+        ('most hunts',       hof.get('hunter'),   lambda w: f"hunts {w['hunts']}"),
+        ('most grazed',      hof.get('grazer'),   lambda w: f"grazed {w['grazed']}"),
+        ('eldest lineage',   hof.get('eldest'),   lambda w: f"gen {w['generation']}"),
     ]
-    if any(v for _, v in hof_entries):
+    if any(wight for _, wight, _ in hof_entries):
         w("")
-        for title, wight in hof_entries:
+        for title, wight, metric_fn in hof_entries:
             if wight is None:
                 continue
-            w(f"  {title:<18}  age {wight['age']:,}  ate {wight['eaten']}  "
-              f"gen {wight['generation']}  "
+            w(f"  {title:<18}  {metric_fn(wight)}  "
               f"size {wight['size']:.1f}  spd {wight['speed']:.2f}  pred {wight['pred_ratio']:.2f}")
 
     if samples and len(samples) > 1:
@@ -474,8 +478,9 @@ def generate(stats, path=None, world=None, tick=None, write_txt=True):
     )
     seed_span = (f'<span class="metric">seed <b>{meta["seed"]}</b></span>'
                  if meta.get('seed') is not None else '')
-    max_age   = max((s['max_age']   for s in samples), default=0)
-    max_eaten = max((s['max_eaten'] for s in samples), default=0)
+    max_age    = max((s['max_age']    for s in samples), default=0)
+    max_hunts  = max((s['max_hunts']  for s in samples), default=0)
+    max_grazed = max((s['max_grazed'] for s in samples), default=0)
     summary_html = f"""
     <div class="summary">
       <span class="metric"><b>{meta.get('ticks',0):,}</b> ticks</span>
@@ -483,7 +488,8 @@ def generate(stats, path=None, world=None, tick=None, write_txt=True):
       <span class="metric"><b>{meta.get('tps',0):,.0f}</b> ticks/sec</span>
       <span class="metric"><b>{meta.get('final_max_gen',0)}</b> max gen</span>
       <span class="metric"><b>{max_age:,}</b> max age</span>
-      <span class="metric"><b>{max_eaten}</b> max eaten</span>
+      <span class="metric"><b>{max_hunts}</b> max hunts</span>
+      <span class="metric"><b>{max_grazed}</b> max grazed</span>
       {seed_span}
       {extinct_badge}
     </div>"""
@@ -1049,11 +1055,12 @@ def _fig_genome_exit(samples):
 def _hof_html(hof):
     cards = []
     labels = {
-        'longest': ('longest-lived',  'age'),
-        'killer':  ('most ate',        'eaten'),
-        'eldest':  ('highest gen',    'generation'),
+        'longest': 'longest-lived',
+        'hunter':  'most hunts',
+        'grazer':  'most grazed',
+        'eldest':  'highest gen',
     }
-    for key, (title, _) in labels.items():
+    for key, title in labels.items():
         w = hof.get(key)
         if w is None:
             continue
@@ -1066,7 +1073,8 @@ def _hof_html(hof):
             ('body color',   f'{body_swatch} rgb({r},{g},{b})'),
             ('lineage',      f'{lineage_swatch} hue {lhue:.3f}'),
             ('age',          f"{w['age']:,} ticks"),
-            ('ate',          str(w['eaten'])),
+            ('hunts',        str(w['hunts'])),
+            ('grazed',       str(w['grazed'])),
             ('generation',   str(w['generation'])),
             ('size',         f"{w['size']:.2f}"),
             ('speed',        f"{w['speed']:.2f}"),

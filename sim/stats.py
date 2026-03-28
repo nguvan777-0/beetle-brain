@@ -48,7 +48,8 @@ class StatsCollector:
         self.samples    = []   # one dict per sample tick
         self.hall_fame  = {
             'longest': None,   # max age
-            'killer':  None,   # max eaten
+            'hunter':  None,   # max hunts (predation)
+            'grazer':  None,   # max grazed (food)
             'eldest':  None,   # max generation
         }
         self.run_meta    = {}
@@ -112,7 +113,8 @@ class StatsCollector:
             'pop':              N,
             'max_gen':          int(pop['generation'].max()),
             'max_age':          int(pop['age'].max()),
-            'max_eaten':        int(pop['eaten'].max()),
+            'max_grazed':       int(pop['grazed'].max()),
+            'max_hunts':        int(pop['hunts'].max()),
             # per-trait means
             'size_mean':        float(pop['size'].mean()),
             'size_min':         float(pop['size'].min()),
@@ -155,7 +157,8 @@ class StatsCollector:
     def _update_hall_fame(self, pop, phylo_state):
         for key, idx_fn in [
             ('longest', lambda: int(pop['age'].argmax())),
-            ('killer',  lambda: int(pop['eaten'].argmax())),
+            ('hunter',  lambda: int(pop['hunts'].argmax())),
+            ('grazer',  lambda: int(pop['grazed'].argmax())),
             ('eldest',  lambda: int(pop['generation'].argmax())),
         ]:
             i = idx_fn()
@@ -172,7 +175,8 @@ class StatsCollector:
             hue   = float(phylo_state['hue'][anc % _phylo.M])
         return {
             'age':          int(pop['age'][i]),
-            'eaten':        int(pop['eaten'][i]),
+            'grazed':       int(pop['grazed'][i]),
+            'hunts':        int(pop['hunts'][i]),
             'generation':   int(pop['generation'][i]),
             'speed':        float(pop['speed'][i]),
             'size':         float(pop['size'][i]),
@@ -185,7 +189,7 @@ class StatsCollector:
             'g':            int(pop['g'][i]),
             'b':            int(pop['b'][i]),
             'lineage_hue':  hue,
-            'sort_val':     max(int(pop['age'][i]), int(pop['eaten'][i]) * 10, int(pop['generation'][i]) * 100),
+            'sort_val':     max(int(pop['age'][i]), (int(pop['hunts'][i]) + int(pop['grazed'][i])) * 10, int(pop['generation'][i]) * 100),
         }
 
     # ── finalize ─────────────────────────────────────────────────────────────
