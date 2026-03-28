@@ -57,6 +57,8 @@ def _compute_unit():
 def init_sense_brain() -> bool:
     if not _HAS_CT:
         return False
+    cu = os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU')
+    print(f"[SenseBrain] compute unit: {cu}")
     _load_or_compile()
     return _use_coreml
 
@@ -81,6 +83,7 @@ def _load_or_compile():
                 meta.get("has_cpu_paint") is True  and
                 meta.get("max_pop")   == MAX_POP   and
                 meta.get("buckets")   == BUCKETS   and
+                meta.get("compute_unit") == os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU') and
                 all(_model_path(b).exists() for b in BUCKETS)
             )
         except Exception:
@@ -118,6 +121,7 @@ def _load_or_compile():
             "has_nrays_mask": True, "has_wh": True, "has_rgb": True, "has_bias": True,
             "has_cpu_paint": True,
             "buckets": BUCKETS,
+            "compute_unit": os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU'),
         }))
         _models     = compiled
         _use_coreml = True
@@ -280,7 +284,7 @@ def _compile(B):
 
     path  = _model_path(B)
     model = ct.convert(prog,
-                       compute_units=ct.ComputeUnit.CPU_AND_GPU,
+                       compute_units=_compute_unit(),
                        minimum_deployment_target=ct.target.macOS13)
     model.save(str(path))
     return ct.models.MLModel(str(path), compute_units=_compute_unit())

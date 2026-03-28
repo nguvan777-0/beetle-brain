@@ -59,6 +59,8 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
         print("[Brain] coremltools not available — numpy fallback")
         return False
 
+    cu = os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU')
+    print(f"[Brain] compute unit: {cu}")
     _load_or_compile(max_pop, n_inputs, n_hidden, n_outputs)
     return _use_coreml
 
@@ -72,7 +74,8 @@ def _load_or_compile(max_pop, n_inputs, n_hidden, n_outputs):
             if (meta.get("max_pop") == max_pop and meta.get("n_in")  == n_inputs
                     and meta.get("n_hid") == n_hidden and meta.get("n_out") == n_outputs
                     and meta.get("recurrent") == True and meta.get("has_wh") == True
-                    and meta.get("has_bias") == True):
+                    and meta.get("has_bias") == True
+                    and meta.get("compute_unit") == os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU')):
                 t0 = time.time()
                 model = ct.models.MLModel(str(MODEL_PATH), compute_units=_compute_unit())
                 _model = model
@@ -108,13 +111,14 @@ def _load_or_compile(max_pop, n_inputs, n_hidden, n_outputs):
             return h_new, out
 
         model = ct.convert(brain_prog,
-                           compute_units=ct.ComputeUnit.CPU_AND_GPU,
+                           compute_units=_compute_unit(),
                            minimum_deployment_target=ct.target.macOS13)
         MODEL_PATH.parent.mkdir(exist_ok=True)
         model.save(str(MODEL_PATH))
         META_PATH.write_text(json.dumps(
             {"max_pop": max_pop, "n_in": n_inputs, "n_hid": n_hidden,
-             "n_out": n_outputs, "recurrent": True, "has_wh": True, "has_bias": True}))
+             "n_out": n_outputs, "recurrent": True, "has_wh": True, "has_bias": True,
+             "compute_unit": os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU')}))
         model = ct.models.MLModel(str(MODEL_PATH), compute_units=_compute_unit())
         _model = model
         _use_coreml = True

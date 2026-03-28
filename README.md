@@ -19,12 +19,12 @@ uv run --with numpy --with coremltools --with pygame --with plotly python world.
 To run headless (default 30s; pass a duration in seconds to override):
 
 ```bash
-uv run --with numpy --with coremltools --with plotly python world.py 0
+uv run --with numpy --with coremltools python world.py 0
 ```
 
 Pass a duration in seconds for a timed run, or omit for the default 30s. `python world.py --help` lists all flags.
 
-Without `coremltools` the brain runs on numpy. Without `plotly` the HTML report is skipped. The first run compiles two CoreML models and caches them to `build/`.
+Without `coremltools` the brain runs on numpy. A plain-text report is always written on exit; add `--with plotly` for the HTML version. The first run compiles CoreML models and caches them to `build/`.
 
 **Keys:** `SPACE` cycle speed (1×/5×/20×/100×) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
@@ -150,15 +150,17 @@ The `.txt` covers the same run — trait means at exit, sparkline trajectories, 
 
 Measured on Apple Silicon (Mac mini M4), headless
 
-| `--backend` | hardware | compile | start (pop~16) | mature (pop~1400) | maxpop (4096) |
-|-------------|----------|---------|---------------|-------------------|---------------|
-| `ane`       | CoreML → ANE         | ~30s  | ~1000 t/s | **~192 t/s** | — |
-| `gpu` ✓     | CoreML → GPU         | ~0.4s | ~1000 t/s | ~47 t/s | ~24 t/s |
-| `numpy`     | numpy (no CoreML)    | —     | ~1000 t/s | ~45 t/s | ~23 t/s |
-| `cpu`       | CoreML → CPU         | ~0.4s | ~1250 t/s | ~42 t/s | ~14 t/s |
-| `all`       | CoreML → CPU+GPU+ANE | ~22s  | ~1000 t/s | ~40 t/s | ~18 t/s |
+| `--backend` | hardware | compile | start (pop~14) | grown (pop~38) | max-pop (4096) |
+|-------------|----------|---------|----------------|----------------|-------------|
+| `ane`       | CoreML → ANE         | ~33s  | ~1,250 t/s | ~714 t/s | failed |
+| `gpu` ✓     | CoreML → GPU         | ~1.6s | ~1,250 t/s | ~714 t/s | ~17 t/s |
+| `cpu`       | CoreML → CPU         | ~1.5s | ~1,250 t/s | ~714 t/s | ~11 t/s |
+| `all`       | CoreML → CPU+GPU+ANE | ~17s  | ~1,000 t/s | ~714 t/s | ~16 t/s |
+| `numpy`     | numpy (no CoreML)    | ~1.6s | ~1,250 t/s | ~714 t/s | ~17 t/s |
 
-`gpu` is the default — fast compile, consistent across all population sizes. `ane` is 4× faster at mature populations but costs ~30s every process start (the ANE model cache is unreliable); only worth it for long runs. `cpu` uses CoreML's optimised CPU kernels, faster than numpy at small populations. `all` routes across all hardware simultaneously but scheduling overhead makes it the slowest option.
+At small populations throughput is bounded by CoreML dispatch latency (~2 dispatches per tick), not brain computation — all backends converge around 700–1,250 t/s. Backend differences only emerge at max-pop where brain computation dominates: `gpu` and `numpy` tie at ~17 t/s, `cpu` falls to ~11 t/s, `all` sits at ~16 t/s.
+
+`gpu` is the default — fast compile, consistent across all population sizes. `ane` compiles the 4096-batch model but exceeds ANE on-chip memory at inference; it is fast at mid-range populations but the max-pop case is unsupported. `all` routes across all hardware simultaneously but scheduling overhead makes it slower than `gpu` alone.
 
 
 ## License
