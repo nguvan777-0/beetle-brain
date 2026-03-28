@@ -1,21 +1,13 @@
 """
-Benchmark all CoreML compute unit options and print a perf table.
+Tick-rate benchmark across backends: CoreML compute units and numpy.
 
-Three measurements per backend (two subprocess runs):
+Three measurements per backend:
   world start  — first 500-tick interval from a new world (pop ~12)
   grown        — last 500-tick interval of the same run (pop has grown)
   full         — MAX_POP world, positions randomised, timed separately
 
-The build cache is cleared before each backend so compile times are real.
-
-Usage:
-    uv run --with coremltools python scripts/bench_compute_units.py
-    uv run --with coremltools python scripts/bench_compute_units.py --duration 60
-    uv run --with numpy python scripts/bench_compute_units.py
-
-Internal:
-    python scripts/bench_compute_units.py --worker <duration>
-    (called by the script itself as a subprocess for the full-pop phase)
+Build cache is cleared before each backend so compile times are real.
+Calls itself as a subprocess for the full-pop phase (--worker flag, internal).
 """
 import argparse
 import os
@@ -98,38 +90,83 @@ OPTIONS = [
 if not _HAS_CT:
     OPTIONS = [o for o in OPTIONS if o[1] is None]
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--duration", type=int, default=5,
-                    help="seconds per phase per backend (default: 5)")
-parser.add_argument("--seed", type=int, default=None,
-                    help="random seed (default: random)")
-args = parser.parse_args()
-args.seed = args.seed if args.seed is not None else random.randint(0, 2**31 - 1)
+_MISSING = object()
+
+def _int(s):
+    try: return int(s)
+    except ValueError: raise argparse.ArgumentTypeError(f"invalid value '{s}'  —  expected a number")
+
+class _Parser(argparse.ArgumentParser):
+    def error(self, message):
+        super().error(message.replace('argument --', '--', 1))
+
+parser = _Parser(
+    prog='bench_compute_units.py',
+    usage=argparse.SUPPRESS,
+    description=(
+        'bench_compute_units  —  tick-rate benchmark across backends\n'
+        '\n'
+        'Two phases per backend, each timed for --duration seconds:\n'
+        '  world run  — fresh world, small starting pop growing over time;\n'
+        '               reports t/s at start and at the end of the run\n'
+        '  full pop   — MAX_POP wights, positions randomised; reports t/s\n'
+        '\n'
+        'Usage:\n'
+        '  uv run --with coremltools python scripts/bench_compute_units.py\n'
+        '  uv run --with numpy python scripts/bench_compute_units.py --duration 5\n'
+        '\n'
+        'Libraries:\n'
+        '  numpy          required — or use coremltools which includes it\n'
+        '  coremltools    enables CoreML backends (includes numpy)'
+    ),
+    formatter_class=argparse.RawTextHelpFormatter,
+    add_help=False,
+)
+parser.add_argument('-h', '--help', action='help', help='show this help message and exit')
+parser.add_argument('--duration', type=_int, nargs='?', const=_MISSING, default=60, metavar='N',
+                    help='seconds per phase per backend  (default: 60)')
+parser.add_argument('--backend', nargs='?', const=_MISSING, default='gpu' if _HAS_CT else 'numpy', metavar='BACKEND',
+                    help='backend(s) to bench  (default: gpu)\n'
+                         '  ane, gpu, cpu  — CoreML with that compute unit\n'
+                         '  all            — CoreML with ANE + GPU + CPU together\n'
+                         '  numpy          — no CoreML\n'
+                         '  every          — each of the above\n'
+                         '  ane,gpu        — comma-separate for a subset')
+parser.add_argument('--seed', type=_int, nargs='?', const=_MISSING, default=None, metavar='N',
+                    help='random seed  (default: random)')
+parser._optionals.title = 'Options'
 
 THIS = str(Path(__file__).resolve())
 
 try:
     from sim.config import MAX_POP
 except ModuleNotFoundError:
-    print()
-    print("  error: numpy is required — use --with numpy, or --with coremltools (which includes numpy)")
-    print()
-    print("  bench_compute_units — benchmark CoreML compute unit options")
-    print()
-    print("  Usage:")
-    print("    uv run --with coremltools python scripts/bench_compute_units.py")
-    print("    uv run --with numpy python scripts/bench_compute_units.py")
-    print()
-    print("  Options:")
-    print("    --duration N    seconds per phase per backend  (default: 5)")
-    print("    --seed N        random seed  (default: random)")
-    print()
-    print("  coremltools includes numpy. omit it to benchmark numpy only.")
-    print()
-    sys.exit(1)
+    parser.error("numpy is required — use --with numpy, or --with coremltools (which includes numpy)")
+
+args = parser.parse_args()
+
+if args.duration is _MISSING:
+    parser.error('--duration requires a value  —  expected a number')
+if args.seed is _MISSING:
+    parser.error('--seed requires a value  —  expected a number')
+
+_ALL_LABELS = [label for label, _ in OPTIONS]
+_CHOICES    = _ALL_LABELS + ['every']
+if args.backend is _MISSING:
+    parser.error(f"--backend requires a value  —  choices: {', '.join(_CHOICES)}")
+
+args.seed = args.seed if args.seed is not None else random.randint(0, 2**31 - 1)
+
+if args.backend.lower() != 'every':
+    _requested = [b.strip().lower() for b in args.backend.split(',')]
+    _unknown   = [b for b in _requested if b not in _ALL_LABELS]
+    if _unknown:
+        parser.error(f"unknown backend: {', '.join(_unknown)}  —  choices: {', '.join(_CHOICES)}")
+    OPTIONS = [o for o in OPTIONS if o[0] in _requested]
 
 col_w   = max(len(label) for label, _ in OPTIONS) + 2
 col_tps = 16
+sep_w   = col_w + 10 + col_tps * 3 + 8
 
 
 def _clear_cache():
@@ -152,10 +189,7 @@ def _deps(compute_unit):
     return deps
 
 
-_NOISE = re.compile(r'Running MIL|passes/s\]|^\s*$|RuntimeWarning|overflow|tmp_range')
-
 def _stream(cmd, env, prefix):
-    """Run cmd, stream meaningful lines with prefix, return full output."""
     proc = subprocess.Popen(
         cmd, cwd=ROOT, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -164,8 +198,7 @@ def _stream(cmd, env, prefix):
     for line in proc.stdout:
         line = line.rstrip()
         buf.append(line)
-        if line and not _NOISE.search(line):
-            print(f"  {prefix}  {line}", flush=True)
+        print(f"  {prefix}  {line}", flush=True)
     proc.wait()
     return "\n".join(buf)
 
@@ -181,7 +214,7 @@ def _parse_compile(output):
         _f(r"\[SenseBrain\] all done \(([0-9.]+)s\)"),
     ] if x is not None]
     if not vals:
-        return "—", 0.0
+        return "n/a", 0.0
     t = max(vals)
     return f"~{t:.1f}s", t
 
@@ -216,25 +249,25 @@ def _parse_full_tps(output):
     return int(m.group(2).replace(",", "")) if m else None
 
 
-def _fmt(tps, failed=False):
-    if failed:
+def _fmt(tps):
+    if tps == 'failed':
         return "failed"
-    return f"{tps:,} t/s" if tps else "—"
+    return f"{tps:,} t/s" if tps else "n/a"
 
 
 def _print_header(ws_hdr, gr_hdr):
-    sep = "─" * (col_w + 10 + col_tps * 3 + 8)
+    sep = "─" * sep_w
     print(sep)
     print(f"{'backend':<{col_w}}  {'compile':>8}  {ws_hdr:>{col_tps}}  {gr_hdr:>{col_tps}}  {f'full ({MAX_POP})':>{col_tps}}")
     print(sep)
 
 
-def _print_row(label, compile_str, start_tps, grown_tps, full_tps):
-    marker = " ✓" if label == "gpu" else "  "
+def _print_row(label, compile_str, start_tps, grown_tps, full_tps, fastest=False):
+    marker = " ✓" if fastest else "  "
     print(f"{label + marker:<{col_w}}  {compile_str:>8}  "
           f"{_fmt(start_tps):>{col_tps}}  "
           f"{_fmt(grown_tps):>{col_tps}}  "
-          f"{_fmt(full_tps, failed=(full_tps == 'failed')):>{col_tps}}", flush=True)
+          f"{_fmt(full_tps):>{col_tps}}", flush=True)
 
 
 # ── run ───────────────────────────────────────────────────────────────────────
@@ -242,19 +275,19 @@ def _print_row(label, compile_str, start_tps, grown_tps, full_tps):
 print(f"\nbench_compute_units  —  {args.duration}s per phase, seed {args.seed}"
       f"  |  max pop {MAX_POP}  |  cache cleared before each backend\n")
 
-rows    = []
-ws_hdr  = "world start"
-gr_hdr  = "grown"
+rows        = []
+ws_hdr      = "world start"
+gr_hdr      = "grown"
 hdr_printed = False
 
 for label, compute_unit in OPTIONS:
-    print(f"── {label}  {'─' * (col_w + 50 - len(label))}", flush=True)
+    print(f"── {label}  {'─' * (sep_w - len(label) - 5)}", flush=True)
 
     _clear_cache()
     print(f"  {label}  world run ({args.duration}s):", flush=True)
     out_world = _stream(
         ["uv", "run", *_deps(compute_unit),
-         "python", "world.py", "--duration", str(args.duration), "--new", "--seed", str(args.seed),
+         "python", "-u", "world.py", "--duration", str(args.duration), "--new", "--seed", str(args.seed), "--no-report",
          "--backend", label if compute_unit is not None else "numpy"],
         _env(compute_unit), "│",
     )
@@ -265,7 +298,7 @@ for label, compute_unit in OPTIONS:
     print(f"  {label}  full pop ({args.duration}s):", flush=True)
     out_full = _stream(
         ["uv", "run", *_deps(compute_unit),
-         "python", THIS, "--worker", str(args.duration), str(args.seed)],
+         "python", "-u", THIS, "--worker", str(args.duration), str(args.seed)],
         _env(compute_unit), "│",
     )
     full_tps = _parse_full_tps(out_full)
@@ -288,15 +321,17 @@ for label, compute_unit in OPTIONS:
         print(f"    ↳ ANE on-chip memory limit — {MAX_POP}-batch model compiles but fails at inference")
     print(flush=True)
 
-# ── final sorted table ────────────────────────────────────────────────────────
+# ── final sorted table (only when multiple backends were tested) ──────────────
 
 ane_failed = any(label == 'ane' and full_tps == 'failed' for label, _, _, _, _, _, full_tps in rows)
 
-print(f"\n  final results  —  sorted by grown t/s\n")
-_print_header(ws_hdr, gr_hdr)
-for (label, compile_str, start_tps, start_pop,
-     grown_tps, grown_pop, full_tps) in sorted(rows, key=lambda r: -(r[4] if isinstance(r[4], int) else 0)):
-    _print_row(label, compile_str, start_tps, grown_tps, full_tps)
+if len(rows) > 1:
+    print(f"── results  {'─' * (sep_w - 12)}\n")
+    _print_header(ws_hdr, gr_hdr)
+    sorted_rows = sorted(rows, key=lambda r: -(r[4] if isinstance(r[4], int) else 0))
+    for i, (label, compile_str, start_tps, start_pop,
+            grown_tps, grown_pop, full_tps) in enumerate(sorted_rows):
+        _print_row(label, compile_str, start_tps, grown_tps, full_tps, fastest=(i == 0))
 if ane_failed:
     print(f"\n  † ANE full ({MAX_POP}): model compiles but exceeds ANE on-chip memory at inference.")
 print()

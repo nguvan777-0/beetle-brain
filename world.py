@@ -12,62 +12,77 @@ if sys.version_info < (3, 11):
     print()
     sys.exit(1)
 
+import argparse
+
+_MISSING          = object()
+_BACKEND_CHOICES  = 'gpu, ane, cpu, all, numpy'
+
+def _float(s):
+    try: return float(s)
+    except ValueError: raise argparse.ArgumentTypeError(f"invalid value '{s}'  —  expected a number")
+
+def _int(s):
+    try: return int(s)
+    except ValueError: raise argparse.ArgumentTypeError(f"invalid value '{s}'  —  expected a number")
+
+class _Parser(argparse.ArgumentParser):
+    def error(self, message):
+        super().error(message.replace('argument --', '--', 1))
+
+parser = _Parser(
+    prog='world.py',
+    usage=argparse.SUPPRESS,
+    description=(
+        'beetle-brain  —  evolution on weights\n'
+        '\n'
+        'Usage:\n'
+        '  uv run --with coremltools --with pygame python world.py\n'
+        '  uv run --with coremltools python world.py --new\n'
+        '\n'
+        'Libraries:\n'
+        '  numpy          required — or use coremltools which includes it\n'
+        '  coremltools    CoreML acceleration on Apple Silicon (includes numpy)\n'
+        '  pygame         visual display\n'
+        '  plotly         HTML report generation\n'
+        '\n'
+        'Runs forever by default. Omit pygame to run headless. Snapshot and reports written on exit.'
+    ),
+    formatter_class=argparse.RawTextHelpFormatter,
+    add_help=False,
+)
+parser.add_argument('-h', '--help', action='help', help='show this help message and exit')
+parser.add_argument('--duration', type=_float, nargs='?', const=_MISSING, default=None, metavar='N',
+                    help='stop after N seconds  (default: run forever)')
+parser.add_argument('--backend', nargs='?', const=_MISSING, default='CPU_AND_GPU', metavar='BACKEND',
+                    help='backend  (default: gpu)\n'
+                         '  gpu, ane, cpu  — CoreML with that compute unit\n'
+                         '  all            — CoreML with ANE + GPU + CPU together\n'
+                         '  numpy          — no CoreML')
+parser.add_argument('--seed',  type=_int, nargs='?', const=_MISSING, default=None, metavar='N',
+                    help='start fresh with seed N  (ignores snapshot)')
+parser.add_argument('--new',   action='store_true',
+                    help='start fresh with a random seed  (ignores snapshot)')
+parser.add_argument('--fork',  type=_int, nargs='?', const=_MISSING, default=None, metavar='N',
+                    help='load snapshot, run forward with a different RNG seed')
+parser.add_argument('--no-report', action='store_true',
+                    help='skip printing the report on exit')
+parser._optionals.title = 'Options'
+
 try:
     import numpy  # noqa: F401
 except ImportError:
-    print()
-    print("  error: numpy is required — use --with numpy, or --with coremltools (which includes numpy)")
-    print()
-    print("  world.py — beetle-brain neuroevolution sim")
-    print()
-    print("  Usage:")
-    print("    uv run --with coremltools --with pygame python world.py")
-    print("    uv run --with numpy python world.py")
-    print()
-    print("  Libraries:")
-    print("    numpy          required — or use coremltools which includes it")
-    print("    coremltools    CoreML acceleration on Apple Silicon (includes numpy)")
-    print("    pygame         visual display")
-    print("    plotly         HTML report generation")
-    print()
-    print("  Options:")
-    print("    --duration N        stop after N seconds  (default: run forever)")
-    print("    --backend BACKEND   CoreML backend: gpu (default), ane, cpu, all, numpy")
-    print("    --seed N            start a new world with seed N")
-    print("    --new               start a new world with a random seed")
-    print("    --fork N            load snapshot, run forward with a different RNG seed")
-    print()
-    sys.exit(1)
+    parser.error("numpy is required — use --with numpy, or --with coremltools (which includes numpy)")
 
-import argparse
-
-parser = argparse.ArgumentParser(
-    prog='world.py',
-    description=(
-        'beetle-brain  —  neuroevolution in a living world\n'
-        '\n'
-        'quick start (with pygame):\n'
-        '  uv run --with coremltools --with pygame --with plotly python world.py\n'
-        '\n'
-        'headless (no pygame required):\n'
-        '  uv run --with coremltools --with plotly python world.py\n'
-        '\n'
-        'runs forever by default. pass --duration to set a time limit.\n'
-        'a report is always written on exit.'
-    ),
-    formatter_class=argparse.RawTextHelpFormatter,
-)
-parser.add_argument('--duration', type=float, default=None, metavar='N',
-                    help='stop after this many seconds  (default: run forever)')
-parser.add_argument('--seed',  type=int, metavar='X',
-                    help='start a new world with seed X  (ignores any saved snapshot)')
-parser.add_argument('--new',   action='store_true',
-                    help='start a new world with a random seed  (ignores any saved snapshot)')
-parser.add_argument('--fork',  type=int, metavar='X',
-                    help='load snapshot but run forward with a different RNG seed X')
-parser.add_argument('--backend', metavar='BACKEND', default='CPU_AND_GPU',
-                    help='CoreML backend: gpu (default), ane, all, cpu, numpy  — full names also accepted')
 args = parser.parse_args()
+
+if args.duration is _MISSING:
+    parser.error('--duration requires a value  —  expected a number')
+if args.seed is _MISSING:
+    parser.error('--seed requires a value  —  expected a number')
+if args.fork is _MISSING:
+    parser.error('--fork requires a value  —  expected a number')
+if args.backend is _MISSING:
+    parser.error(f'--backend requires a value  —  choices: {_BACKEND_CHOICES}')
 
 _BACKENDS = {
     'gpu':         'CPU_AND_GPU',
@@ -81,7 +96,7 @@ _BACKENDS = {
 }
 _backend = _BACKENDS.get(args.backend.lower().replace('-', '_'))
 if _backend is None:
-    parser.error(f"unknown backend {args.backend!r}  —  valid: gpu, ane, all, cpu, numpy")
+    parser.error(f"unknown backend {args.backend!r}  —  choices: {_BACKEND_CHOICES}")
 args.backend = _backend
 
 try:
@@ -150,7 +165,8 @@ else:
         txt_path = _report_stem(stats) + ".txt"
         if not Path(txt_path).exists():
             generate_text(stats, txt_path, world=world if not extinct else None, tick=tick)
-        print("\n" + Path(txt_path).read_text())
+        if not args.no_report:
+            print("\n" + Path(txt_path).read_text())
 
     atexit.register(_on_exit)
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))

@@ -56,7 +56,6 @@ def init_brain(max_pop: int, n_inputs: int, n_hidden: int, n_outputs: int) -> bo
     _n_out   = n_outputs
 
     if not _HAS_CT:
-        print("[Brain] coremltools not available — numpy fallback")
         return False
 
     cu = os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU')
