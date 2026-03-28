@@ -22,7 +22,7 @@ PANEL_W = 320
 
 _font_title: object = None   # lazily initialised; pygame not ready at import time
 _font_key_label: object = None
-_font_arrow:     object = None   # Arial Unicode (or None) for circular arrow glyphs
+_font_arrow:     object = None   # Arial Unicode bold at 3× size (or None) for circular arrow glyphs
 
 def _arrow_font(size):
     """Return a font that can render ↻/↺, or None if unavailable."""
@@ -153,9 +153,10 @@ def _render_text(text: str, font, color: tuple):
     if text_str == "__ICON_RESTART__":
         import math
         sz    = font.get_height()
-        af    = _arrow_font(sz)
+        af    = _arrow_font(sz * 3)
         if af:
-            return af.render('↻', True, color)
+            big = af.render('↻', True, color)
+            return pygame.transform.smoothscale(big, (big.get_width() // 3, sz))
         res   = pygame.Surface((sz, sz), pygame.SRCALPHA)
         color = (90, 210, 110)
         cx, cy = sz * 0.5, sz * 0.5

@@ -47,6 +47,8 @@ class RenderState:
     phylo_state:   dict
     is_extinct:    bool
     day:           bool        # True = day (sunlight on); False = night
+    seed_idx:      int         # position in channel history
+    seed_history:  list        # list of seed strings visited this session
 
 
 def _copy_pop(pop):
@@ -93,6 +95,9 @@ class SimRunner(threading.Thread):
 
         self._paused         = False
         self._speed_idx      = 1        # default 1×
+        initial_seed         = world.get('seed')
+        self._seed_history   = [initial_seed] if initial_seed is not None else []
+        self._seed_idx       = 0
         self._next_sample    = SAMPLE_EVERY
         self._lineage_hist: list = []
         self._cached_pca     = None
@@ -137,8 +142,26 @@ class SimRunner(threading.Thread):
                     self._publish()
             elif tag == 'speed':
                 self._speed_idx = cmd[1]
+            elif tag == 'change_channel':
+                self._seed_idx += 1
+                if self._seed_idx >= len(self._seed_history):
+                    from sim.seed import random_name
+                    self._seed_history.append(random_name())
+                seed = self._seed_history[self._seed_idx]
+                self._world          = new_world(seed=seed)
+                self._tick           = 0
+                self._history        = []
+                self._hall_fame      = []
+                self._stats          = StatsCollector()
+                self._next_sample    = SAMPLE_EVERY
+                self._lineage_hist   = []
+                self._cached_pca     = None
+                self._is_extinct     = False
+                self._t_start        = time.time()
             elif tag == 'reset':
                 seed = cmd[1] if len(cmd) > 1 else None
+                if seed is None:
+                    seed = self._seed_history[self._seed_idx]  # restart same channel
                 self._world          = new_world(seed=seed)
                 self._tick           = 0
                 self._history        = []
@@ -206,6 +229,8 @@ class SimRunner(threading.Thread):
             phylo_state   = world['phylo'],
             is_extinct    = self._is_extinct,
             day           = world.get('day', True),
+            seed_idx      = self._seed_idx,
+            seed_history  = list(self._seed_history),
         )
         with self._lock:
             self._state = state
@@ -421,6 +446,8 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
             ):
                 runner.send(('speed', event.key - pygame.K_KP1 + 1))
 
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_c:
+                runner.send(('change_channel',))
             if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 last_rst_t = time.time()
                 sel_idx    = None
