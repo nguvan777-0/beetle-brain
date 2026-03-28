@@ -130,26 +130,21 @@ def _draw_vent_map(surf, pop, vents, rect):
 
 from functools import lru_cache
 
+
+def _trim(surf):
+    """Crop surface to tight content bounding box so icons have no internal padding."""
+    bb = surf.get_bounding_rect()
+    if bb.width == 0 or bb.height == 0:
+        return surf
+    out = pygame.Surface((bb.width, bb.height), pygame.SRCALPHA)
+    out.blit(surf, (0, 0), bb)
+    return out
+
+
 @lru_cache(maxsize=1024)
 def _render_text(text: str, font, color: tuple):
     text_str = str(text)
     
-    if text_str == "__ICON_PLAY__":
-        sz = font.get_height()
-        res = pygame.Surface((sz, sz), pygame.SRCALPHA)
-        # Smooth triangle using polygon
-        pts = [(sz*0.25, sz*0.15), (sz*0.85, sz*0.5), (sz*0.25, sz*0.85)]
-        pygame.draw.polygon(res, color, pts)
-        return res
-        
-    if text_str == "__ICON_PAUSE__":
-        sz = font.get_height()
-        res = pygame.Surface((sz, sz), pygame.SRCALPHA)
-        w = max(2, int(sz * 0.2))
-        pygame.draw.rect(res, color, (sz*0.2, sz*0.15, w, sz*0.7))
-        pygame.draw.rect(res, color, (sz*0.6, sz*0.15, w, sz*0.7))
-        return res
-
     if text_str == "__ICON_TV__":
         sz    = font.get_height()
         res   = pygame.Surface((sz, sz), pygame.SRCALPHA)
@@ -189,7 +184,7 @@ def _render_text(text: str, font, color: tuple):
         vh = max(2, int(sz * 0.15))
         pygame.draw.rect(res, dark, (sl + 1, vy, sz - sl*2 - 2, vh), border_radius=1)
         pygame.draw.line(res, mid, (sl+2, vy+1), (sz - sl - 4, vy+1))
-        return res
+        return _trim(res)
 
     if text_str == "__ICON_RESTART__":
         sz    = font.get_height()
@@ -218,7 +213,37 @@ def _render_text(text: str, font, color: tuple):
         # vertical stop-bar to the left of the left triangle
         bx = int(l_base - th) - bar_gap - bar_w
         pygame.draw.rect(res, col, (bx, int(cy - tw * 0.5), bar_w, int(tw)))
-        return res
+        return _trim(res)
+
+    if text_str == "__ICON_PLAY__":
+        sz  = font.get_height()
+        res = pygame.Surface((sz, sz), pygame.SRCALPHA)
+        col = (50, 205, 50)
+        cy  = sz * 0.5
+        th  = sz * 0.72   # triangle depth
+        tw  = sz * 0.86   # triangle height
+        cx  = sz * 0.52
+        tri = [(int(cx - th * 0.4), int(cy - tw * 0.5)),
+               (int(cx - th * 0.4), int(cy + tw * 0.5)),
+               (int(cx + th * 0.6), int(cy))]
+        pygame.draw.polygon(res, col, tri)
+        return _trim(res)
+
+    if text_str == "__ICON_PAUSE__":
+        sz   = font.get_height()
+        res  = pygame.Surface((sz, sz), pygame.SRCALPHA)
+        col  = (255, 120, 0)
+        cy   = sz * 0.5
+        bh   = sz * 0.86   # bar height
+        bw   = max(3, int(sz * 0.32))   # bar width
+        gap  = max(1, int(sz * 0.16))   # gap between bars
+        cx   = sz * 0.5
+        lx   = int(cx - gap // 2 - bw)
+        rx   = int(cx + gap // 2)
+        top  = int(cy - bh * 0.5)
+        pygame.draw.rect(res, col, (lx, top, bw, int(bh)))
+        pygame.draw.rect(res, col, (rx, top, bw, int(bh)))
+        return _trim(res)
 
     if text_str == "__ICON_SUN__":
         import math
@@ -239,7 +264,7 @@ def _render_text(text: str, font, color: tuple):
             base2 = (cx + math.cos(a_next) * r_base, cy + math.sin(a_next) * r_base)
             pygame.draw.polygon(res, color, [tip, base1, base2])
         pygame.draw.circle(res, color, (int(cx), int(cy)), int(r_core))
-        return res
+        return _trim(res)
 
     if text_str == "__ICON_FRAME__":
         sz    = font.get_height()
@@ -266,7 +291,7 @@ def _render_text(text: str, font, color: tuple):
         # inner accent line for depth
         il = 1
         pygame.draw.rect(res, (180, 148, 72), (px + bw - il, bw, fw - (bw - il) * 2, sz - bw * 2), il)
-        return res
+        return _trim(res)
 
     if text_str == "__ICON_MOON__":
         import math
@@ -289,7 +314,7 @@ def _render_text(text: str, font, color: tuple):
             pts.append((cx + bite_dx + math.cos(a) * r_in,
                         cy           + math.sin(a) * r_in))
         pygame.draw.polygon(res, color, [(int(x), int(y)) for x, y in pts])
-        return res
+        return _trim(res)
 
     # Automatically style the "x" part of speed labels (like "1x", "5x", "100x")
     if text_str.endswith("x") and len(text_str) > 1 and text_str not in ("fps", "MAX"):
@@ -622,12 +647,8 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         sub_y     = y + (row_h - sf.get_height()) // 2
         seed_surf = _render_text(str(seed), sf, COLOR)
         tick_surf = _render_text(f"t:{tick:,}", sf, COLOR)
-        if paused:
-            fnum_surf = _render_text("paused", sf, (140, 80, 80))
-            flbl_surf = _render_text("", lf, COLOR)
-        else:
-            fnum_surf = _render_text(f"{fps:.0f}", sf, COLOR)
-            flbl_surf = _render_text("fps", lf, COLOR)
+        fnum_surf = _render_text(f"{fps:.0f}", sf, COLOR)
+        flbl_surf = _render_text("fps", lf, COLOR)
         pair_w    = seed_surf.get_width() + 6 + tick_surf.get_width()
         seed_x    = max(px + 6 + title_surf.get_width() + 8,
                         px + (PANEL_W - pair_w) // 2)
@@ -639,12 +660,8 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                                sub_y + sf.get_height() - lf.get_height()))
     else:
         sub_y     = y + (row_h - font_lg.get_height()) // 2
-        if paused:
-            fnum_surf = _render_text("paused", font_lg, (140, 80, 80))
-            flbl_surf = _render_text("", font, (80, 95, 130))
-        else:
-            fnum_surf = _render_text(f"{fps:.0f}", font_lg, (80, 95, 130))
-            flbl_surf = _render_text("fps", font, (80, 95, 130))
+        fnum_surf = _render_text(f"{fps:.0f}", font_lg, (80, 95, 130))
+        flbl_surf = _render_text("fps", font, (80, 95, 130))
         fps_x     = px + PANEL_W - 6 - fnum_surf.get_width() - flbl_surf.get_width()
         surf.blit(fnum_surf, (fps_x, sub_y))
         surf.blit(flbl_surf, (fps_x + fnum_surf.get_width(),
@@ -716,11 +733,13 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     # row 2: four keycaps distributed across the panel
     row2_top = y - PY2
     sp_lbl   = "__ICON_SUN__" if day else "__ICON_MOON__"
+    p_lbl    = "__ICON_PAUSE__" if paused else "__ICON_PLAY__"
     keys = [
         ("space", day,          sp_lbl,             48,   0),
+        ("p",     paused,       p_lbl,              None, 5),
         ("s",     snap_active,  "__ICON_FRAME__",   None, 7),
         ("r",     rst_active,   "__ICON_RESTART__", None, 8),
-        ("c",     chan_active,  "__ICON_TV__",        None, 3),
+        ("c",     chan_active,  "__ICON_TV__",       None, 3),
     ]
     widths  = [_keycap_width(k, font_sm, label=lbl, f_label=kl_font, face_w=fw)
                for k, _, lbl, fw, _ in keys]
