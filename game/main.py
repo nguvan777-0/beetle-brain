@@ -15,7 +15,8 @@ from game.snapshot import save_snapshot, load_snapshot
 from scripts.report import generate as generate_report
 
 FPS         = 60
-SPEED_STEPS = [1, 5, 20, 100]   # ticks per frame
+FRAME_S     = 1.0 / FPS                  # frame budget in seconds
+SPEED_STEPS = [0.5, 1, 5, 20, 100, None]  # 0.5 = every other frame; None = hardware MAX
 TOTAL_W     = sim.WIDTH + PANEL_W
 HIST_MAX    = 300
 
@@ -64,8 +65,12 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
     next_sample   = SAMPLE_EVERY
     lineage_hist  = []
     t_start       = time.time()
-    sim_speed_idx = 0
-    sel_idx       = None
+    sim_speed_idx  = 1          # default 1x
+    paused         = False
+    frame_count    = 0
+    last_snap_t    = -999.0
+    last_rst_t     = -999.0
+    sel_idx        = None
     extinction_reported = False
     
     cached_pca_proj = None
@@ -88,14 +93,6 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                     save_snapshot(world, tick, history, hall_fame, stats)
                 _exit_with_report(stats, tick, world, t_start, extinct=is_extinct)
                 pygame.quit(); sys.exit()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_l:
-                result = load_snapshot(rng)
-                if result[0] is not None:
-                    world, tick, history, hall_fame, _sv = result
-                    stats = _sv if _sv is not None else StatsCollector()
-                    next_sample = SAMPLE_EVERY
-                    lineage_hist = []; t_start = time.time(); sel_idx = None
-                    
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = pygame.mouse.get_pos()
                 if mx < sim.WIDTH and len(pop['x']) > 0:
@@ -103,8 +100,19 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                     idx     = int(dists.argmin())
                     sel_idx = idx if dists[idx] < 40 else None
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                sim_speed_idx = (sim_speed_idx + 1) % len(SPEED_STEPS)
+                paused = not paused
+            if event.type == pygame.KEYDOWN and event.key in (
+                pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5,
+            ):
+                sim_speed_idx = event.key - pygame.K_0
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_KP0:
+                sim_speed_idx = 0
+            if event.type == pygame.KEYDOWN and event.key in (
+                pygame.K_KP1, pygame.K_KP2, pygame.K_KP3, pygame.K_KP4, pygame.K_KP5,
+            ):
+                sim_speed_idx = event.key - pygame.K_KP1 + 1  # KP1→1, …, KP5→5
             if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                last_rst_t = time.time()
                 world = new_world(); tick = 0; history = []; hall_fame = []
                 stats = StatsCollector(); next_sample = SAMPLE_EVERY
                 lineage_hist = []; t_start = time.time()
@@ -121,15 +129,33 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                 path = f"screenshots/screenshot_{commit}_{world.get('seed', 0)}_{tick:07d}.png"
                 pygame.image.save(surf, path)
                 print(f"screenshot → {path}")
+                last_snap_t = time.time()
 
         # ── sim ticks ─────────────────────────────────────────────────────────
-        if len(pop['x']) > 0:
-            for _ in range(speed):
-                world = sim_tick(world, rng)
-                if len(world['pop']['x']) == 0:
-                    break
+        frame_count += 1
+        if not paused and len(pop['x']) > 0:
+            if speed is None:
+                # hardware MAX: run ticks for the full frame budget
+                t0 = time.time(); ticks_done = 0
+                while time.time() - t0 < FRAME_S:
+                    world = sim_tick(world, rng)
+                    ticks_done += 1
+                    if len(world['pop']['x']) == 0:
+                        break
+            elif speed == 0.5:
+                # half speed: one tick every other frame
+                ticks_done = 0
+                if frame_count % 2 == 0:
+                    world = sim_tick(world, rng)
+                    ticks_done = 1
+            else:
+                for _ in range(speed):
+                    world = sim_tick(world, rng)
+                    if len(world['pop']['x']) == 0:
+                        break
+                ticks_done = speed
             pop   = world['pop']
-            tick += speed
+            tick += ticks_done
 
             # stats
             if tick >= next_sample and len(pop['x']) > 0:
@@ -137,7 +163,7 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                 next_sample += SAMPLE_EVERY
 
             # history
-            if tick % 30 < speed and len(pop['x']) > 0:
+            if tick % 30 < ticks_done and len(pop['x']) > 0:
                 history.append((
                     float(tick), float(len(pop['x'])),
                     float(pop['generation'].max()),
@@ -208,10 +234,15 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
 
         sel_wb   = pop['W_body'][sel_idx].copy() if sel_idx is not None and sel_idx < len(pop['x']) else None
 
+        now = time.time()
         draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
-                   history, lineage_hist, hall_fame, speed,
+                   history, lineage_hist, hall_fame,
                    vents=world['vents'], phylo_state=world['phylo'], seed=world.get('seed'),
-                   pca_proj=pca_proj, sel_W_body=sel_wb, anc_ids=anc_ids)
+                   pca_proj=pca_proj, sel_W_body=sel_wb, anc_ids=anc_ids,
+                   paused=paused, sim_speed_idx=sim_speed_idx,
+                   snap_active=(now - last_snap_t) < 0.2,
+                   rst_active=(now - last_rst_t) < 0.2,
+                   fps=clock.get_fps())
 
         pygame.display.flip()
         clock.tick(FPS)

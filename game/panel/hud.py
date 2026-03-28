@@ -20,6 +20,25 @@ from game.panel.sparkline import draw_sparkline
 
 PANEL_W = 320
 
+_font_title: object = None   # lazily initialised; pygame not ready at import time
+
+def _title_font():
+    global _font_title
+    if _font_title is None:
+        _font_title = pygame.font.SysFont("monospace", 16, bold=True)
+    return _font_title
+
+# Rainbow colors for the legend keys: sp · 1x · 2x · 3x · 4x · 5x · s · r
+# Red (sp) → violet (r:rst), precomputed once at import time.
+_LEGEND_N = 9
+_LEGEND_COLORS = [
+    (
+        tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / (_LEGEND_N - 1) * 0.75, 0.75, 0.95)),
+        tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / (_LEGEND_N - 1) * 0.75, 0.60, 0.58)),
+    )
+    for i in range(_LEGEND_N)
+]
+
 _LINEAGE_COLORS = [
     (255, 100, 100), (100, 200, 255), (100, 255, 140), (255, 200,  60),
     (200, 100, 255), (255, 150,  50), ( 80, 220, 200), (220, 220, 100),
@@ -266,36 +285,104 @@ def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
 
 def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                history, lineage_history, hall_fame, sim_speed=1, vents=None, phylo_state=None,
-               seed=None, pca_proj=None, sel_W_body=None, anc_ids=None):
+               seed=None, pca_proj=None, sel_W_body=None, anc_ids=None,
+               paused=False, sim_speed_idx=0, snap_active=False, rst_active=False, fps=0):
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
 
-    y = 10
+    y = 4
 
     def txt(s, f=None, color=(180, 180, 200)):
         nonlocal y
-        surf.blit(_render_text(s, f or font, color), (px + 10, y))
+        surf.blit(_render_text(s, f or font, color), (px + 6, y))
         y += (f or font).get_height() + 2
 
     def sep():
         nonlocal y
-        pygame.draw.line(surf, (40, 40, 60), (px + 8, y + 2), (px + PANEL_W - 8, y + 2), 1)
+        pygame.draw.line(surf, (40, 40, 60), (px + 6, y + 2), (px + PANEL_W - 6, y + 2), 1)
         y += 8
 
-    speed_label = "HEADLESS" if sim_speed == 0 else f"{sim_speed}x"
-    speed_color = (255, 180, 50) if sim_speed != 1 else (120, 120, 150)
-    surf.blit(_render_text("BEETLE-BRAIN", font_lg, (220, 220, 255)), (px + 10, y))
+    tf         = _title_font()
+    row_h      = tf.get_height()
+    sub_y      = y + (row_h - font_lg.get_height()) // 2   # vertical centre for smaller items
+
+    title_surf = _render_text("BEETLE-BRAIN", tf, (220, 220, 255))
+    surf.blit(title_surf, (px + 6, y))
+
     if seed is not None:
-        seed_surf = _render_text(f"seed {seed}", font_sm, (100, 110, 140))
-        surf.blit(seed_surf, (px + PANEL_W - seed_surf.get_width() - 8, y + 3))
-    y += font_lg.get_height() + 2
-    txt(f"tick {tick:,}   [{speed_label}]  SPACE=cycle", font_sm, speed_color)
+        seed_surf = _render_text(str(seed), font_lg, (80, 95, 130))
+        seed_x    = max(px + 6 + title_surf.get_width() + 8,
+                        px + (PANEL_W - seed_surf.get_width()) // 2)
+        surf.blit(seed_surf, (seed_x, sub_y))
+
+    fps_surf = _render_text(f"{fps:.0f}fps", font_lg, (80, 95, 130))
+    surf.blit(fps_surf, (px + PANEL_W - 6 - fps_surf.get_width(), sub_y))
+
+    y += row_h + 4
+
+    # ── key legend — pill buttons, rainbow-colored ───────────────────────
+    # key order: 0=sp  1=1x  2=5x  3=20x  4=100x  5=MAX  6=s:snap  7=r:rst
+    def _kc(i, active=True):
+        return _LEGEND_COLORS[i][0 if active else 1]
+
+    PX2, PY2 = 6, 3   # pill padding x / y
+    MARGIN   = 6       # left/right margin inside panel
+
+    def _pill(lx, text_y, label, i, active, f=None):
+        """text_y = text top (matches panel y convention). Rect expands PY2 above/below."""
+        f = f or font
+        hot, dim = _LEGEND_COLORS[i]
+        fg = hot if active else dim
+        ts = _render_text(label, f, fg)
+        tw, th = ts.get_size()
+        w = tw + PX2 * 2
+        if active:
+            fill = tuple(max(0, c - 200) + 30 for c in hot)
+            pygame.draw.rect(surf, fill,
+                             pygame.Rect(lx, text_y - PY2, w, th + PY2 * 2),
+                             border_radius=4)
+        surf.blit(ts, (lx + PX2, text_y))
+        return w
+
+    def _pill_row(items, text_y):
+        """items: [(label, color_idx, active, font_or_None), ...]
+        Distributes pills evenly across the full panel width."""
+        widths = []
+        for label, i, active, f in items:
+            f = f or font
+            widths.append(_render_text(label, f, (255, 255, 255)).get_width() + PX2 * 2)
+        total_w   = sum(widths)
+        available = PANEL_W - MARGIN * 2
+        gap       = (available - total_w) / max(len(items) - 1, 1)
+        lx = px + MARGIN
+        for (label, i, active, f), w in zip(items, widths):
+            _pill(lx, text_y, label, i, active, f)
+            lx += w + gap
+
+    state_label = "sp:PAUSE" if paused else "sp:PLAY "
+
+    _pill_row([
+        ("0:.5x",  1, sim_speed_idx == 0, None),
+        ("1:1x",   2, sim_speed_idx == 1, None),
+        ("2:5x",   3, sim_speed_idx == 2, None),
+        ("3:20x",  4, sim_speed_idx == 3, None),
+        ("4:100x", 5, sim_speed_idx == 4, None),
+        ("5:MAX",  6, sim_speed_idx == 5, None),
+    ], y)
+    y += font.get_height() + 6
+
+    _pill_row([
+        (state_label,    0, paused,       None),
+        ("s:screenshot", 7, snap_active,  font_lg),
+        ("r:restart",    8, rst_active,   font_lg),
+    ], y)
+    y += font_lg.get_height() + 6
     sep()
 
     N = len(pop['x'])
     if N > 0:
-        txt(f"pop {N}  max gen {int(pop['generation'].max())}  max age {int(pop['age'].max())}  max hunts {int(pop['hunts'].max())}", font_sm, (160, 200, 160))
+        txt(f"tick {tick:,}  pop {N}  gen {int(pop['generation'].max())}  age {int(pop['age'].max())}  hunts {int(pop['hunts'].max())}", font_sm, (160, 200, 160))
         sep()
 
     # ── stacked area: phylo sub-lineage populations over time ────────────
@@ -379,5 +466,3 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                       (bar_x + j * bw, bar_y + 22))
         y = bar_y + 38
 
-    y = surf.get_height() - 30
-    txt("S save  L load  R restart  click inspect", font_sm, (80, 80, 100))

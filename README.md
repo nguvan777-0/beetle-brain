@@ -6,7 +6,7 @@ Neuroevolution sim where the organism is its weights, accelerated via CoreML on 
 - **Derived** (our rules, does not evolve): `energy_max = 10 × size²` (storage ∝ volume), `drain = 0.010 × size^0.75` (Kleiber's law).
 - **Emergent**: predator/prey dimorphism, camouflage arms races, lineage divergence, and spatial memory — nothing encodes these, they appear.
 
-![beetle-brain](https://github.com/nguvan777-0/beetle-brain/releases/download/screenshots/screenshot_s753463_0007937.png)
+![beetle-brain](https://github.com/nguvan777-0/beetle-brain/releases/download/screenshots/screenshot_f8fa4f5_225919_0001894.png)
 
 ## Run with the sun
 
@@ -49,7 +49,7 @@ Options:
   --no-report          skip printing the report on exit
 ```
 
-**Keys:** `SPACE` cycle speed (1×/5×/20×/100×) · `L` load · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
+**Keys:** `SPACE` play/pause · `0–5` speed (0.5×/1×/5×/20×/100×/MAX) · `S` screenshot · `R` restart · `click` inspect wight · `ESC` quit (auto-saves, generates report)
 
 ## the wight
 
