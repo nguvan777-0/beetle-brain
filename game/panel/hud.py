@@ -192,35 +192,32 @@ def _render_text(text: str, font, color: tuple):
         return res
 
     if text_str == "__ICON_RESTART__":
-        import math
         sz    = font.get_height()
-        af    = _arrow_font(sz * 3)
-        if af:
-            big = af.render('↻', True, color)
-            return pygame.transform.smoothscale(big, (big.get_width() // 3, sz))
         res   = pygame.Surface((sz, sz), pygame.SRCALPHA)
-        color = (90, 210, 110)
-        cx, cy = sz * 0.5, sz * 0.5
-        r   = sz * 0.40
-        lw  = max(1, int(sz * 0.13))
-        ah  = sz * 0.30   # arrowhead arm length
-        # 270° arc, big gap at top-right so chevron has room
-        gap     = math.radians(90)
-        a_start = math.radians(45) + gap / 2    # left edge of gap
-        a_stop  = a_start + math.radians(270)   # 270° sweep
-        pygame.draw.arc(res, color,
-                        (int(cx - r), int(cy - r), int(r * 2), int(r * 2)),
-                        a_start, a_stop, lw)
-        # open V-chevron at a_stop — reads far better than filled triangle at small sizes
-        t        = a_stop
-        tx, ty   = -math.sin(t), -math.cos(t)   # CCW tangent in screen coords
-        px_, py_ = ty, -tx                        # perpendicular
-        ex = cx + r * math.cos(t)
-        ey = cy - r * math.sin(t)
-        wing1 = (ex - tx * ah + px_ * ah * 0.6, ey - ty * ah + py_ * ah * 0.6)
-        wing2 = (ex - tx * ah - px_ * ah * 0.6, ey - ty * ah - py_ * ah * 0.6)
-        pygame.draw.line(res, color, (int(ex), int(ey)), (int(wing1[0]), int(wing1[1])), lw)
-        pygame.draw.line(res, color, (int(ex), int(ey)), (int(wing2[0]), int(wing2[1])), lw)
+        col   = (220, 60, 60)
+        # ⏮  two left-pointing filled triangles + left bar
+        cy    = sz * 0.5
+        th    = sz * 0.36   # triangle depth (base → tip)
+        tw    = sz * 0.54   # triangle height (top → bottom)
+        tgap  = max(1, int(sz * 0.07))   # gap between the two triangles
+        bar_w = max(1, int(sz * 0.09))
+        bar_gap = max(1, int(sz * 0.05))
+        # lay out right-to-left; right base of rightmost triangle near right edge
+        r_base = sz * 0.92
+        # right triangle: base on right, tip on left
+        t2 = [(int(r_base - th), int(cy)),           # tip  (left)
+              (int(r_base),      int(cy - tw * 0.5)), # base top
+              (int(r_base),      int(cy + tw * 0.5))] # base bottom
+        # left triangle: butts up against right triangle's tip
+        l_base = r_base - th - tgap
+        t1 = [(int(l_base - th), int(cy)),
+              (int(l_base),      int(cy - tw * 0.5)),
+              (int(l_base),      int(cy + tw * 0.5))]
+        pygame.draw.polygon(res, col, t2)
+        pygame.draw.polygon(res, col, t1)
+        # vertical stop-bar to the left of the left triangle
+        bx = int(l_base - th) - bar_gap - bar_w
+        pygame.draw.rect(res, col, (bx, int(cy - tw * 0.5), bar_w, int(tw)))
         return res
 
     if text_str == "__ICON_SUN__":
