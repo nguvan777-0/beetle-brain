@@ -143,6 +143,33 @@ def _render_text(text: str, font, color: tuple):
         pygame.draw.circle(res, color, (int(cx), int(cy)), int(r_core))
         return res
 
+    if text_str == "__ICON_FRAME__":
+        sz    = font.get_height()
+        res   = pygame.Surface((sz, sz), pygame.SRCALPHA)
+        gold  = (218, 182, 95)
+        dark  = (28, 32, 52)
+        # portrait rect: inset 2px on sides so it's clearly taller than wide
+        px  = max(1, int(sz * 0.13))
+        fw  = sz - px * 2              # frame outer width
+        bw  = max(2, int(sz * 0.17))   # border thickness
+        cr  = max(2, int(sz * 0.17))   # corner ornament radius
+        # corner ornament blobs first (behind frame rect)
+        for cx_c, cy_c in [(px, 0), (px + fw - 1, 0),
+                            (px, sz - 1), (px + fw - 1, sz - 1)]:
+            pygame.draw.circle(res, gold, (cx_c, cy_c), cr)
+        # top/bottom mid ornament
+        mr = max(1, int(sz * 0.10))
+        pygame.draw.circle(res, gold, (sz // 2, 0),      mr)
+        pygame.draw.circle(res, gold, (sz // 2, sz - 1), mr)
+        # main frame body (filled rect over the corner circles)
+        pygame.draw.rect(res, gold, (px, 1, fw, sz - 2))
+        # inner canvas
+        pygame.draw.rect(res, dark, (px + bw, bw + 1, fw - bw * 2, sz - (bw + 1) * 2))
+        # inner accent line for depth
+        il = 1
+        pygame.draw.rect(res, (180, 148, 72), (px + bw - il, bw, fw - (bw - il) * 2, sz - bw * 2), il)
+        return res
+
     if text_str == "__ICON_MOON__":
         import math
         sz    = font.get_height()
@@ -593,7 +620,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     sp_lbl   = "__ICON_SUN__" if day else "__ICON_MOON__"
     keys = [
         ("space", day,           sp_lbl,       48,   0),
-        ("s",     snap_active,  "screenshot", None, 7),
+        ("s",     snap_active,  "__ICON_FRAME__",  None, 7),
         ("r",     rst_active,   "restart",    None, 8),
     ]
     widths  = [_keycap_width(k, font_sm, label=lbl, f_label=kl_font, face_w=fw)
