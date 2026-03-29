@@ -23,17 +23,14 @@ def tick(world, rng):
     phylo_state = world['phylo']
     energy_max  = ENERGY_MAX_SCALE * pop['size'] ** 2   # storage ∝ volume
 
-    # ── sense + brain (fused GPU dispatch) ───────────────────────────────────
+    # ── sense + brain + move (fused GPU dispatch) ─────────────────────────────
     idx_grid   = paint_idx_grid(pop)
-    h_new, out = run_sense_brain(pop, food)
+    h_new, out, x_new, y_new, angle_new, speeds = run_sense_brain(pop, food)
+    turns          = out[:, 0] * pop['turn_s']   # kept for drain formula
     pop['h_state'] = h_new
-    turns  = out[:, 0] * pop['turn_s']
-    speeds = (out[:, 1] + 1.0) * pop['speed']
-
-    # ── move ─────────────────────────────────────────────────────────────────
-    pop['angle'] += turns
-    pop['x']      = (pop['x'] + np.cos(pop['angle']) * speeds) % WIDTH
-    pop['y']      = (pop['y'] + np.sin(pop['angle']) * speeds) % HEIGHT
+    pop['angle']   = angle_new
+    pop['x']       = x_new
+    pop['y']       = y_new
 
     # ── metabolic drain ──────────────────────────────────────────────────────
     drain = DRAIN_SCALE * pop['size'] ** 0.75   # Kleiber's law

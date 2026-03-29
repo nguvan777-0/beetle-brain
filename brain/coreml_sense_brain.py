@@ -30,6 +30,7 @@ except ImportError:
 
 from sim.config import (
     N_RAYS, N_INPUTS, N_HIDDEN, N_OUTPUTS, MAX_POP, ENERGY_MAX_SCALE,
+    WIDTH, HEIGHT,
 )
 from sim.grid.constants import (
     GW, GH, GRID_SCALE, MAX_STEPS, _STEPS, _RAY_OFFSETS,
@@ -81,6 +82,7 @@ def _load_or_compile():
                 meta.get("has_rgb")   is True      and
                 meta.get("has_bias")  is True      and
                 meta.get("has_cpu_paint") is True  and
+                meta.get("has_move")   is True      and
                 meta.get("max_pop")   == MAX_POP   and
                 meta.get("buckets")   == BUCKETS   and
                 meta.get("compute_unit") == os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU') and
@@ -119,7 +121,7 @@ def _load_or_compile():
             "max_pop": MAX_POP, "n_rays": N_RAYS, "max_steps": MAX_STEPS,
             "gw": GW, "gh": GH, "n_hid": N_HIDDEN, "n_out": N_OUTPUTS,
             "has_nrays_mask": True, "has_wh": True, "has_rgb": True, "has_bias": True,
-            "has_cpu_paint": True,
+            "has_cpu_paint": True, "has_move": True,
             "buckets": BUCKETS,
             "compute_unit": os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU'),
         }))
@@ -159,11 +161,14 @@ def _compile(B):
         mb.TensorSpec(shape=(B, N_RAYS * 5)),          # n_rays_mask
         mb.TensorSpec(shape=(B, N_HIDDEN)),            # b1
         mb.TensorSpec(shape=(B, N_OUTPUTS)),           # b2
+        mb.TensorSpec(shape=(B,)),                     # turn_s
+        mb.TensorSpec(shape=(B,)),                     # speed_base
     ])
     def prog(x_pos, y_pos, angle, half_fov,
              ray_len_pix, size_pix, energy_frac,
              r_flat, g_flat, b_flat, food_flat,
-             W1, W2, Wh, h_prev, mask, n_rays_mask, b1, b2):
+             W1, W2, Wh, h_prev, mask, n_rays_mask, b1, b2,
+             turn_s, speed_base):
 
         steps_k   = mb.const(val=steps_c)
         offsets_k = mb.const(val=offsets_c)
@@ -280,7 +285,27 @@ def _compile(B):
         h_e2    = mb.expand_dims(x=h_new, axes=[-2])
         out_raw = mb.squeeze(x=mb.matmul(x=h_e2, y=W2), axes=[-2])
         out     = mb.tanh(x=mb.add(x=out_raw, y=b2), name='out')
-        return h_new, out
+
+        # ── movement integration ──────────────────────────────────────────────
+        w_w  = mb.const(val=np.float32(WIDTH))
+        w_h  = mb.const(val=np.float32(HEIGHT))
+        two  = mb.const(val=np.float32(2.0))
+        turn_raw   = mb.slice_by_index(x=out, begin=[0, 0], end=[B, 1], stride=[1, 1])
+        speed_raw  = mb.slice_by_index(x=out, begin=[0, 1], end=[B, 2], stride=[1, 1])
+        turn_1d    = mb.squeeze(x=turn_raw,  axes=[-1])
+        speed_1d   = mb.squeeze(x=speed_raw, axes=[-1])
+        angle_new  = mb.add(x=angle, y=mb.mul(x=turn_1d, y=turn_s), name='angle_new')
+        speeds     = mb.mul(x=mb.add(x=speed_1d, y=one), y=speed_base, name='speeds')
+        x_raw      = mb.add(x=x_pos, y=mb.mul(x=mb.cos(x=angle_new), y=speeds))
+        y_raw      = mb.add(x=y_pos, y=mb.mul(x=mb.sin(x=angle_new), y=speeds))
+        # wrap to world bounds via modulo: v - floor(v/W)*W
+        def _wmod(v, W):
+            return mb.sub(x=v, y=mb.mul(x=mb.floor(x=mb.real_div(x=v, y=W)), y=W))
+        x_new = _wmod(mb.add(x=x_raw, y=w_w), w_w)  # add W first so negatives wrap right
+        y_new = _wmod(mb.add(x=y_raw, y=w_h), w_h)
+        x_new = mb.identity(x=x_new, name='x_new')
+        y_new = mb.identity(x=y_new, name='y_new')
+        return h_new, out, x_new, y_new, angle_new, speeds
 
     path  = _model_path(B)
     model = ct.convert(prog,
@@ -292,11 +317,11 @@ def _compile(B):
 
 # ── public inference ──────────────────────────────────────────────────────────
 
-def run_sense_brain(pop: dict, food: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def run_sense_brain(pop: dict, food: np.ndarray):
     """
     Fused sensing + brain for all wights.
     food: (F, 2) float32 world positions from world['food'].
-    Returns (h_new, out).
+    Returns (h_new, out, x_new, y_new, angle_new, speeds).
 
     Grid painting happens on CPU (disk rasterization), then the CoreML model
     does raycasting + RNN on GPU. Bucket models keep padding waste to ≤4x.
@@ -318,8 +343,15 @@ def run_sense_brain(pop: dict, food: np.ndarray) -> tuple[np.ndarray, np.ndarray
     grid[1, oy, ox] = np.clip(pop['r'], 1, 255).astype(np.uint8)
     grid[2, oy, ox] = np.clip(pop['g'], 1, 255).astype(np.uint8)
     grid[3, oy, ox] = np.clip(pop['b'], 1, 255).astype(np.uint8)
-    inputs = sense(pop, grid)
-    return run_brain(inputs, pop['W1'], pop['W2'], pop['Wh'], pop['b1'], pop['b2'], pop['h_state'])
+    inputs   = sense(pop, grid)
+    h_new, out = run_brain(inputs, pop['W1'], pop['W2'], pop['Wh'], pop['b1'], pop['b2'], pop['h_state'])
+    # compute move on CPU for the fallback path
+    turns     = out[:, 0] * pop['turn_s']
+    speeds    = (out[:, 1] + 1.0) * pop['speed']
+    angle_new = pop['angle'] + turns
+    x_new     = (pop['x'] + np.cos(angle_new) * speeds) % WIDTH
+    y_new     = (pop['y'] + np.sin(angle_new) * speeds) % HEIGHT
+    return h_new, out, x_new, y_new, angle_new, speeds
 
 
 def _predict(pop, food):
@@ -371,5 +403,14 @@ def _predict(pop, food):
         'n_rays_mask': _padn(n_rays_mask),
         'b1':          _padn(pop['b1']),
         'b2':          _padn(pop['b2']),
+        'turn_s':      _pad1(pop['turn_s']),
+        'speed_base':  _pad1(pop['speed']),
     })
-    return r['h_new'][:n], r['out'][:n]
+    return (
+        r['h_new'][:n],
+        r['out'][:n],
+        r['x_new'][:n],
+        r['y_new'][:n],
+        r['angle_new'][:n],
+        r['speeds'][:n],
+    )
