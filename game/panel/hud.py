@@ -20,6 +20,16 @@ from game.panel.sparkline import draw_sparkline
 
 PANEL_W = 320
 
+# Click regions populated by draw_panel each frame — list of (pygame.Rect, action_str)
+_click_regions: list = []
+
+def get_click_action(pos):
+    """Return action string if pos hits a clickable region, else None."""
+    for rect, action in _click_regions:
+        if rect.collidepoint(pos):
+            return action
+    return None
+
 _font_title: object = None   # lazily initialised; pygame not ready at import time
 _font_key_label: object = None
 _font_arrow:     object = None   # Arial Unicode bold at 3× size (or None) for circular arrow glyphs
@@ -243,6 +253,23 @@ def _render_text(text: str, font, color: tuple):
         top  = int(cy - bh * 0.5)
         pygame.draw.rect(res, col, (lx, top, bw, int(bh)))
         pygame.draw.rect(res, col, (rx, top, bw, int(bh)))
+        return _trim(res)
+
+    if text_str == "__ICON_STAR__":
+        import math
+        sz  = font.get_height()
+        res = pygame.Surface((sz, sz), pygame.SRCALPHA)
+        col = (255, 210, 50)
+        cx, cy = sz * 0.5, sz * 0.5
+        r_out  = sz * 0.46
+        r_in   = sz * 0.20
+        pts = []
+        for i in range(5):
+            a_out = math.pi * (-0.5 + 2 * i / 5)
+            a_in  = math.pi * (-0.5 + (2 * i + 1) / 5)
+            pts.append((cx + math.cos(a_out) * r_out, cy + math.sin(a_out) * r_out))
+            pts.append((cx + math.cos(a_in)  * r_in,  cy + math.sin(a_in)  * r_in))
+        pygame.draw.polygon(res, col, [(int(x), int(y)) for x, y in pts])
         return _trim(res)
 
     if text_str == "__ICON_SUN__":
@@ -604,7 +631,8 @@ def _draw_stacked_area(surf, lineage_history, rect, phylo_state):
 def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                history, lineage_history, hall_fame, sim_speed=1, vents=None, phylo_state=None,
                seed=None, pca_proj=None, sel_W_body=None, anc_ids=None,
-               paused=False, sim_speed_idx=0, snap_active=False, rst_active=False, chan_active=False, fps=0, day=True):
+               paused=False, sim_speed_idx=0, snap_active=False, rst_active=False, chan_active=False, fav_active=False,
+               favorites=None, fav_scroll=0, fps=0, day=True):
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
@@ -743,6 +771,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         ("s",     snap_active,  "__ICON_FRAME__",   None, 7),
         ("r",     rst_active,   "__ICON_RESTART__", None, 8),
         ("c",     chan_active,  "__ICON_TV__",       None, 3),
+        ("f",     fav_active,   "__ICON_STAR__",    None, 4),
     ]
     widths  = [_keycap_width(k, font_sm, label=lbl, f_label=kl_font, face_w=fw)
                for k, _, lbl, fw, _ in keys]
@@ -781,7 +810,73 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
         pygame.draw.circle(surf, lcol,         frame_icon_c, wr + 1, 1)
         pygame.draw.circle(surf, (sr, sg, sb), frame_icon_c, wr)
         surf.set_clip(old_clip)
-    y += kl_font.get_height() + _KEYCAP_SHELF + PY2 + 6
+    y += font_sm.get_height() + _KEYCAP_SHELF + 3  # 3 = KPY bottom padding in _draw_keycap
+    y += 1
+
+    # ── favorites strip ───────────────────────────────────────────────────────
+    _click_regions.clear()
+    favs = favorites or []
+    if favs:
+        strip_h  = font.get_height()
+        strip_y  = y
+
+        hit_pad  = 4
+        arr_w    = max(5, strip_h * 4 // 10)   # triangle width
+        arr_h    = max(4, strip_h * 6 // 10)   # triangle height
+        arr_l_x  = px + 8
+        arr_r_x  = px + PANEL_W - 8 - arr_w
+        inner_x  = arr_l_x + arr_w + 4
+        inner_w  = arr_r_x - 4 - inner_x
+        GAP      = 10   # px between seed names
+
+        def _draw_arrow(surface, tip_x, mid_y, direction, color):
+            """direction: -1 = left, +1 = right"""
+            h2 = arr_h // 2
+            if direction == -1:
+                pts = [(tip_x, mid_y), (tip_x + arr_w, mid_y - h2), (tip_x + arr_w, mid_y + h2)]
+            else:
+                pts = [(tip_x + arr_w, mid_y), (tip_x, mid_y - h2), (tip_x, mid_y + h2)]
+            pygame.draw.polygon(surface, color, pts)
+
+        arr_mid  = strip_y + strip_h // 2
+
+        # figure out which seeds fit starting at fav_scroll
+        cur_seed = str(seed) if seed is not None else ""
+        visible  = []
+        x_cursor = 0
+        for i in range(fav_scroll, len(favs)):
+            s      = favs[i]
+            active = (s == cur_seed)
+            col    = (255, 215, 80) if active else (140, 155, 195)
+            ns     = _render_text(s, font, col)
+            if x_cursor + ns.get_width() > inner_w and visible:
+                break
+            visible.append((i, s, ns, inner_x + x_cursor, active))
+            x_cursor += ns.get_width() + GAP
+
+        # draw visible seeds and register click regions
+        text_y = strip_y + (strip_h - font.get_height()) // 2
+        for i, s, ns, nx, active in visible:
+            surf.blit(ns, (nx, text_y))
+            _click_regions.append((
+                pygame.Rect(nx - 2, strip_y, ns.get_width() + 4, strip_h),
+                f'load_seed:{s}'
+            ))
+
+        # < arrow
+        can_prev = fav_scroll > 0
+        _draw_arrow(surf, arr_l_x, arr_mid, -1, (180, 195, 240) if can_prev else (45, 50, 70))
+        if can_prev:
+            _click_regions.append((pygame.Rect(arr_l_x - hit_pad, strip_y, arr_w + hit_pad * 2, strip_h), 'fav_scroll_prev'))
+
+        # > arrow
+        can_next = visible and visible[-1][0] < len(favs) - 1
+        _draw_arrow(surf, arr_r_x, arr_mid, +1, (180, 195, 240) if can_next else (45, 50, 70))
+        if can_next:
+            _click_regions.append((pygame.Rect(arr_r_x - hit_pad, strip_y, arr_w + hit_pad * 2, strip_h), 'fav_scroll_next'))
+
+        y += strip_h
+
     sep()
 
     N = len(pop['x'])

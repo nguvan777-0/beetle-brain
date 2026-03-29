@@ -16,11 +16,19 @@ from sim import phylo
 from sim.stats import StatsCollector, SAMPLE_EVERY
 from game.renderer import draw_organism, draw_rays, draw_food
 from game.panel import draw_panel, PANEL_W
-from game.panel.hud import _anc_color
+from game.panel.hud import _anc_color, get_click_action
 from game.snapshot import save_snapshot, load_snapshot
 from scripts.report import generate as generate_report
 
 FPS         = 60
+_FAV_PATH   = os.path.join(os.path.dirname(__file__), '..', 'favorites.txt')
+
+def _load_favorites():
+    try:
+        with open(_FAV_PATH) as f:
+            return [l.strip() for l in f if l.strip()]
+    except FileNotFoundError:
+        return []
 FRAME_S     = 1.0 / FPS                  # frame budget in seconds
 SPEED_STEPS = [0.5, 1, 5, 20, 100, None]  # 0.5 = 30 t/s; None = hardware MAX
 TOTAL_W     = sim.WIDTH + PANEL_W
@@ -142,6 +150,50 @@ class SimRunner(threading.Thread):
                     self._publish()
             elif tag == 'speed':
                 self._speed_idx = cmd[1]
+            elif tag == 'favorite':
+                seed = self._world.get('seed')
+                if seed is not None:
+                    favs = _load_favorites()
+                    if seed in favs:
+                        favs = [s for s in favs if s != seed]
+                        print(f"☆  removed favorite: {seed}")
+                    else:
+                        favs.insert(0, seed)
+                        print(f"★  saved favorite: {seed}")
+                    with open(_FAV_PATH, 'w') as f:
+                        f.write('\n'.join(favs) + ('\n' if favs else ''))
+            elif tag == 'unfavorite':
+                seed = self._world.get('seed')
+                if seed is not None:
+                    favs = [s for s in _load_favorites() if s != seed]
+                    with open(_FAV_PATH, 'w') as f:
+                        f.write('\n'.join(favs) + ('\n' if favs else ''))
+                    print(f"☆  removed favorite: {seed}")
+            elif tag == 'load_seed':
+                seed = cmd[1]
+                self._world          = new_world(seed=seed)
+                self._tick           = 0
+                self._history        = []
+                self._hall_fame      = []
+                self._stats          = StatsCollector()
+                self._next_sample    = SAMPLE_EVERY
+                self._lineage_hist   = []
+                self._cached_pca     = None
+                self._is_extinct     = False
+                self._t_start        = time.time()
+            elif tag == 'prev_channel':
+                if self._seed_idx > 0:
+                    self._seed_idx -= 1
+                    seed = self._seed_history[self._seed_idx]
+                    self._world       = new_world(seed=seed)
+                    self._tick        = 0
+                    self._history     = []
+                    self._lin_history = []
+                    self._hall_fame   = []
+                    self._cached_pca  = None
+                    self._is_extinct  = False
+                    self._t_start     = time.time()
+                    self._publish()
             elif tag == 'change_channel':
                 self._seed_idx += 1
                 if self._seed_idx >= len(self._seed_history):
@@ -404,9 +456,12 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
     runner.start()
 
     sel_idx     = None
-    last_snap_t = -999.0
-    last_rst_t  = -999.0
-    last_chan_t = -999.0
+    last_snap_t  = -999.0
+    last_rst_t   = -999.0
+    last_chan_t  = -999.0
+    last_fav_t   = -999.0
+    fav_scroll   = 0
+    _favs_cache  = _load_favorites()   # loaded once; refreshed on fav toggle
 
     while True:
         snap = runner.get_state()
@@ -423,7 +478,28 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
             if event.type == pygame.MOUSEBUTTONDOWN and snap is not None:
                 mx, my = pygame.mouse.get_pos()
                 pop = snap.pop
-                if mx < sim.WIDTH and len(pop['x']) > 0:
+                # panel click regions (channel strip)
+                action = get_click_action((mx, my))
+                if action == 'fav_scroll_prev':
+                    fav_scroll = max(0, fav_scroll - 1)
+                elif action == 'fav_scroll_next':
+                    fav_scroll = min(fav_scroll + 1, max(0, len(_favs_cache) - 1))
+                elif action and action.startswith('load_seed:'):
+                    seed_to_load = action[len('load_seed:'):]
+                    sel_idx = None
+                    runner.send(('load_seed', seed_to_load))
+                elif action == 'favorite':
+                    last_fav_t = time.time()
+                    runner.send(('favorite',))
+                    time.sleep(0.05)   # let sim thread write file before we reload
+                    _favs_cache = _load_favorites()
+                    fav_scroll  = 0    # new entry is at position 0 — scroll to show it
+                elif action == 'unfavorite':
+                    runner.send(('unfavorite',))
+                    time.sleep(0.05)
+                    _favs_cache = _load_favorites()
+                    fav_scroll  = max(0, min(fav_scroll, len(_favs_cache) - 1))
+                elif mx < sim.WIDTH and len(pop['x']) > 0:
                     dists   = np.hypot(pop['x'] - mx, pop['y'] - my)
                     idx     = int(dists.argmin())
                     sel_idx = idx if dists[idx] < 40 else None
@@ -451,6 +527,12 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                 last_chan_t = time.time()
                 sel_idx     = None
                 runner.send(('change_channel',))
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_f:
+                last_fav_t = time.time()
+                runner.send(('favorite',))
+                time.sleep(0.05)
+                _favs_cache = _load_favorites()
+                fav_scroll  = 0
             if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 last_rst_t = time.time()
                 sel_idx    = None
@@ -507,6 +589,8 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                    snap_active=(now - last_snap_t) < 0.2,
                    rst_active=(now - last_rst_t) < 0.2,
                    chan_active=(now - last_chan_t) < 0.2,
+                   fav_active=(now - last_fav_t) < 0.2,
+                   favorites=_favs_cache, fav_scroll=fav_scroll,
                    fps=clock.get_fps(), day=snap.day)
 
         if snap.is_extinct:
