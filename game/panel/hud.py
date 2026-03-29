@@ -633,6 +633,7 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                seed=None, pca_proj=None, sel_W_body=None, anc_ids=None,
                paused=False, sim_speed_idx=0, snap_active=False, rst_active=False, chan_active=False, fav_active=False,
                favorites=None, fav_scroll=0, fps=0, day=True):
+    _click_regions.clear()
     px = surf.get_width() - PANEL_W
     pygame.draw.rect(surf, (16, 16, 28), (px, 0, PANEL_W, surf.get_height()))
     pygame.draw.line(surf, (50, 50, 80), (px, 0), (px, surf.get_height()), 1)
@@ -754,10 +755,15 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
                 for k, lbl, _, _ in speed_keys]
     s_gap    = (PANEL_W - MARGIN * 2 - sum(s_widths)) / max(len(speed_keys) - 1, 1)
     lx1      = px + MARGIN
+    row1_h   = kl_font.get_height() + _KEYCAP_SHELF
     for (kname, klabel, ci, active), kw in zip(speed_keys, s_widths):
         lc = _LEGEND_COLORS[ci][0 if active else 1]
         _draw_keycap(surf, lx1, row1_top, kname, active, font_sm,
                      label=klabel, f_label=kl_font, label_color=lc)
+        _click_regions.append((
+            pygame.Rect(lx1, row1_top, kw, row1_h),
+            f'speed:{kname}',
+        ))
         lx1 += kw + s_gap
     y += kl_font.get_height() + _KEYCAP_SHELF + PY2 + 6
 
@@ -766,23 +772,28 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     sp_lbl   = "__ICON_SUN__" if day else "__ICON_MOON__"
     p_lbl    = "__ICON_PAUSE__" if paused else "__ICON_PLAY__"
     keys = [
-        ("space", day,          sp_lbl,             48,   0),
-        ("p",     paused,       p_lbl,              None, 5),
-        ("s",     snap_active,  "__ICON_FRAME__",   None, 7),
-        ("r",     rst_active,   "__ICON_RESTART__", None, 8),
-        ("c",     chan_active,  "__ICON_TV__",       None, 3),
-        ("f",     fav_active,   "__ICON_STAR__",    None, 4),
+        ("space", day,          sp_lbl,             48,   0, 'toggle_day'),
+        ("p",     paused,       p_lbl,              None, 5, 'pause'),
+        ("s",     snap_active,  "__ICON_FRAME__",   None, 7, 'screenshot'),
+        ("r",     rst_active,   "__ICON_RESTART__", None, 8, 'reset'),
+        ("c",     chan_active,  "__ICON_TV__",       None, 3, 'change_channel'),
+        ("f",     fav_active,   "__ICON_STAR__",    None, 4, 'favorite'),
     ]
     widths  = [_keycap_width(k, font_sm, label=lbl, f_label=kl_font, face_w=fw)
-               for k, _, lbl, fw, _ in keys]
+               for k, _, lbl, fw, _, _act in keys]
     gap     = (PANEL_W - MARGIN * 2 - sum(widths)) / max(len(keys) - 1, 1)
     lx3          = px + MARGIN
+    row2_h       = kl_font.get_height() + _KEYCAP_SHELF
     frame_icon_c = None   # (cx, cy) of the frame icon, captured during loop
     frame_canvas  = None  # pygame.Rect of the inner canvas, clipping region
-    for (kname, kpressed, klabel, kfw, ci), kw in zip(keys, widths):
+    for (kname, kpressed, klabel, kfw, ci, kaction), kw in zip(keys, widths):
         lc = _LEGEND_COLORS[ci][0 if kpressed else 1]
         _draw_keycap(surf, lx3, row2_top, kname, kpressed, font_sm,
                      label=klabel, f_label=kl_font, face_w=kfw, label_color=lc)
+        _click_regions.append((
+            pygame.Rect(lx3, row2_top, kw, row2_h),
+            kaction,
+        ))
         if klabel == "__ICON_FRAME__":
             icon_sz = kl_font.get_height()
             icon_x  = lx3 + kw - icon_sz
@@ -814,7 +825,6 @@ def draw_panel(surf, font, font_sm, font_lg, tick, pop, sel_idx,
     y += 1
 
     # ── favorites strip ───────────────────────────────────────────────────────
-    _click_regions.clear()
     favs = favorites or []
     if favs:
         strip_h  = font.get_height()

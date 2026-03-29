@@ -181,6 +181,7 @@ class SimRunner(threading.Thread):
                 self._cached_pca     = None
                 self._is_extinct     = False
                 self._t_start        = time.time()
+                self._publish()
             elif tag == 'prev_channel':
                 if self._seed_idx > 0:
                     self._seed_idx -= 1
@@ -210,6 +211,7 @@ class SimRunner(threading.Thread):
                 self._cached_pca     = None
                 self._is_extinct     = False
                 self._t_start        = time.time()
+                self._publish()
             elif tag == 'reset':
                 seed = cmd[1] if len(cmd) > 1 else None
                 if seed is None:
@@ -224,6 +226,7 @@ class SimRunner(threading.Thread):
                 self._cached_pca     = None
                 self._is_extinct     = False
                 self._t_start        = time.time()
+                self._publish()
         return True
 
     def _do_quit(self):
@@ -520,6 +523,35 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                     time.sleep(0.05)
                     _favs_cache = _load_favorites()
                     fav_scroll  = max(0, min(fav_scroll, len(_favs_cache) - 1))
+                elif action and action.startswith('speed:'):
+                    runner.send(('speed', int(action[6:])))
+                elif action == 'toggle_day':
+                    runner.send(('toggle_day',))
+                elif action == 'pause':
+                    runner.send(('pause',))
+                elif action == 'screenshot':
+                    import subprocess
+                    try:
+                        commit = subprocess.check_output(
+                            ['git', 'rev-parse', '--short', 'HEAD'],
+                            stderr=subprocess.DEVNULL).decode().strip()
+                    except Exception:
+                        commit = 'unknown'
+                    os.makedirs("screenshots", exist_ok=True)
+                    seed_val = snap.seed if snap is not None else 0
+                    tick_val = snap.tick if snap is not None else 0
+                    path = f"screenshots/screenshot_{commit}_{seed_val}_{tick_val:07d}.png"
+                    pygame.image.save(surf, path)
+                    print(f"screenshot → {path}")
+                    last_snap_t = time.time()
+                elif action == 'reset':
+                    last_rst_t = time.time()
+                    sel_idx    = None
+                    runner.send(('reset', None))
+                elif action == 'change_channel':
+                    last_chan_t = time.time()
+                    sel_idx    = None
+                    runner.send(('change_channel',))
                 elif mx < sim.WIDTH and len(pop['x']) > 0:
                     dists   = np.hypot(pop['x'] - mx, pop['y'] - my)
                     idx     = int(dists.argmin())
