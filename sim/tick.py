@@ -13,6 +13,7 @@ from sim.hgt import eat_hgt, contact_hgt
 from sim.population.genome import decode
 from sim.population.ops import filter_pop, concat_pop
 from brain.coreml_sense_brain import run_sense_brain
+from sim.grid.constants import GRID_SCALE, GH, GW, _PR_OFF
 
 
 def tick(world, rng):
@@ -47,7 +48,6 @@ def tick(world, rng):
     if ENERGY_SUNLIGHT > 0 and world.get('day', True):
         land_mask = pop['x'] >= COASTLINE_X
         if land_mask.any():
-            from sim.grid.constants import GRID_SCALE, GH, GW
             cx = np.clip((pop['x'][land_mask] * GRID_SCALE).astype(np.int32), 0, GW - 1)
             cy = np.clip((pop['y'][land_mask] * GRID_SCALE).astype(np.int32), 0, GH - 1)
 
@@ -69,8 +69,7 @@ def tick(world, rng):
     # ── eat food ─────────────────────────────────────────────────────────────
     if len(food) > 0 and len(pop['x']) > 0:
         # Broad Phase: Map food to integer painter-grid, narrow search via bounding patch
-        from sim.grid.constants import GRID_SCALE, GH, GW, _PR_OFF
-        
+
         fy = np.clip((food[:, 1] * GRID_SCALE).astype(np.int32), 0, GH - 1)
         fx = np.clip((food[:, 0] * GRID_SCALE).astype(np.int32), 0, GW - 1)
         
@@ -113,7 +112,7 @@ def tick(world, rng):
                 food = food[~eaten_food_mask]
 
     # ── predation ────────────────────────────────────────────────────────────
-    from sim.grid.constants import GRID_SCALE, GH, GW, _PR_OFF
+
     oy = np.clip((pop['y'] * GRID_SCALE).astype(np.int32), 0, GH - 1)
     ox = np.clip((pop['x'] * GRID_SCALE).astype(np.int32), 0, GW - 1)
     row_idx = (oy[:, None, None] + _PR_OFF[None, :, None]) % GH

@@ -33,8 +33,7 @@ def predation(pop, idx_grid, j_idx):
     hunts    = valid & in_range & bigger
 
     # split prey energy among all hunters of the same prey
-    prey_hunt_counts = np.zeros(N, dtype=np.float32)
-    np.add.at(prey_hunt_counts, j_idx[hunts], 1.0)
+    prey_hunt_counts = np.bincount(j_idx[hunts], minlength=N).astype(np.float32)
     counts_per_slot  = np.where(hunts, prey_hunt_counts[j_safe].clip(min=1), 1.0)
     prey_gain = (hunts * pop['energy'][j_safe] / counts_per_slot).sum(axis=1) * 0.3
 

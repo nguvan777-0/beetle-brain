@@ -395,22 +395,44 @@ class SimRunner(threading.Thread):
 # ── render helpers ─────────────────────────────────────────────────────────────
 
 def _draw_organisms(surf, pop, phylo_state, sel_idx, anc_ids=None):
-    if sel_idx is not None and sel_idx < len(pop['x']):
+    N = len(pop['x'])
+    if sel_idx is not None and sel_idx < N:
         draw_rays(surf, pop['x'][sel_idx], pop['y'][sel_idx],
                   pop['fov'][sel_idx], pop['angle'][sel_idx], pop['ray_len'][sel_idx])
-    if len(pop['x']) > 0:
-        if anc_ids is None:
-            depth   = max(4, int(pop['generation'].max()) // 3)
-            anc_ids = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
-        halo_colors = [_anc_color(int(a), phylo_state) for a in anc_ids]
-        for i in range(len(pop['x'])):
-            draw_organism(surf, pop['x'][i], pop['y'][i], pop['angle'][i],
-                          pop['size'][i], int(pop['r'][i]), int(pop['g'][i]),
-                          int(pop['b'][i]), halo_colors[i])
-    if sel_idx is not None and sel_idx < len(pop['x']):
+    if N == 0:
+        return
+    if anc_ids is None:
+        depth   = max(4, int(pop['generation'].max()) // 3)
+        anc_ids = phylo.ancestor_at(pop['individual_id'], depth, phylo_state)
+    halo_colors = [_anc_color(int(a), phylo_state) for a in anc_ids]
+
+    # Pre-compute all per-organism values vectorially — avoids N scalar numpy ops
+    angles = pop['angle']
+    sizes  = pop['size']
+    xs  = np.round(pop['x']).astype(np.int32)
+    ys  = np.round(pop['y']).astype(np.int32)
+    exs = np.round(pop['x'] + np.cos(angles) * (sizes + 4)).astype(np.int32)
+    eys = np.round(pop['y'] + np.sin(angles) * (sizes + 4)).astype(np.int32)
+    rs  = pop['r'].astype(np.int32)
+    gs  = pop['g'].astype(np.int32)
+    bs  = pop['b'].astype(np.int32)
+    szs = np.maximum(1, sizes.astype(np.int32))
+
+    # Cache attribute lookups outside the loop
+    dc    = pygame.draw.circle
+    dl    = pygame.draw.line
+    WHITE = (255, 255, 255)
+
+    for i in range(N):
+        pos = (xs[i], ys[i])
+        dc(surf, halo_colors[i], pos, szs[i] + 2, 1)
+        dc(surf, (rs[i], gs[i], bs[i]), pos, szs[i])
+        dl(surf, WHITE, pos, (exs[i], eys[i]), 1)
+
+    if sel_idx is not None and sel_idx < N:
         pygame.draw.circle(surf, (255, 255, 0),
-                           (int(pop['x'][sel_idx]), int(pop['y'][sel_idx])),
-                           int(pop['size'][sel_idx]) + 3, 1)
+                           (xs[sel_idx], ys[sel_idx]),
+                           szs[sel_idx] + 3, 1)
 
 
 def _draw_extinction_overlay(surf, font, font_lg, tick):
@@ -438,6 +460,7 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
     surf    = pygame.display.set_mode((TOTAL_W, sim.HEIGHT))
     pygame.display.set_caption("beetle-brain  |  wight")
     clock   = pygame.time.Clock()
+
     font    = pygame.font.SysFont("monospace", 12)
     font_sm = pygame.font.SysFont("monospace", 10)
     font_lg = pygame.font.SysFont("monospace", 14)
@@ -459,7 +482,6 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
     last_snap_t  = -999.0
     last_rst_t   = -999.0
     last_chan_t  = -999.0
-    last_fav_t   = -999.0
     fav_scroll   = 0
     _favs_cache  = _load_favorites()   # loaded once; refreshed on fav toggle
 
@@ -489,7 +511,6 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                     sel_idx = None
                     runner.send(('load_seed', seed_to_load))
                 elif action == 'favorite':
-                    last_fav_t = time.time()
                     runner.send(('favorite',))
                     time.sleep(0.05)   # let sim thread write file before we reload
                     _favs_cache = _load_favorites()
@@ -528,7 +549,6 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                 sel_idx     = None
                 runner.send(('change_channel',))
             if event.type == pygame.KEYDOWN and event.key == pygame.K_f:
-                last_fav_t = time.time()
                 runner.send(('favorite',))
                 time.sleep(0.05)
                 _favs_cache = _load_favorites()
@@ -589,7 +609,7 @@ def main(new=False, seed=None, fork=None, compute_units='CPU_AND_GPU'):
                    snap_active=(now - last_snap_t) < 0.2,
                    rst_active=(now - last_rst_t) < 0.2,
                    chan_active=(now - last_chan_t) < 0.2,
-                   fav_active=(now - last_fav_t) < 0.2,
+                   fav_active=(str(snap.seed) in _favs_cache),
                    favorites=_favs_cache, fav_scroll=fav_scroll,
                    fps=clock.get_fps(), day=snap.day)
 
