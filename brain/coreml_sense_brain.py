@@ -45,6 +45,9 @@ BUCKETS = [16, 64, 256, 1024, MAX_POP]
 
 _models     = {}   # bucket_size -> ct.models.MLModel
 _use_coreml = False
+_input_bufs = {}   # bucket_size -> pre-allocated {name: ndarray} input dict
+_N_HID_RANGE  = np.arange(N_HIDDEN, dtype=np.float32)
+_N_RAYS_RANGE = np.arange(N_RAYS,   dtype=np.float32)
 
 
 def _model_path(b):
@@ -66,7 +69,7 @@ def init_sense_brain() -> bool:
 
 
 def _load_or_compile():
-    global _models, _use_coreml
+    global _models, _use_coreml, _input_bufs
 
     meta_ok = False
     if META_PATH.exists():
@@ -85,6 +88,7 @@ def _load_or_compile():
                 meta.get("has_cpu_paint") is True  and
                 meta.get("has_move")   is True      and
                 meta.get("has_drain") is True      and
+                meta.get("has_slim_out") is True    and
                 meta.get("max_pop")   == MAX_POP   and
                 meta.get("buckets")   == BUCKETS   and
                 meta.get("compute_unit") == os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU') and
@@ -101,6 +105,7 @@ def _load_or_compile():
                 loaded[b] = ct.models.MLModel(str(_model_path(b)), compute_units=_compute_unit())
             _models     = loaded
             _use_coreml = True
+            _input_bufs = _alloc_input_bufs()
             print(f"[SenseBrain] ready ({time.time()-t0:.1f}s)")
             return
         except Exception as e:
@@ -124,11 +129,13 @@ def _load_or_compile():
             "gw": GW, "gh": GH, "n_hid": N_HIDDEN, "n_out": N_OUTPUTS,
             "has_nrays_mask": True, "has_wh": True, "has_rgb": True, "has_bias": True,
             "has_cpu_paint": True, "has_move": True, "has_drain": True,
+            "has_slim_out": True,
             "buckets": BUCKETS,
             "compute_unit": os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU'),
         }))
         _models     = compiled
         _use_coreml = True
+        _input_bufs = _alloc_input_bufs()
         print(f"[SenseBrain] all done ({time.time()-t0:.1f}s)")
     except Exception as e:
         print(f"[SenseBrain] FAILED: {e}")
@@ -346,7 +353,7 @@ def _compile(B):
             x=base_drain, y=spd_drain), y=trn_drain), y=sz2_drain), y=sns_drain), y=brn_drain)
         energy_new  = mb.mul(x=mb.sub(x=energy, y=total_drain), y=at, name='energy_new')
 
-        return h_new, out, x_new, y_new, angle_new, speeds, energy_new
+        return h_new, x_new, y_new, angle_new, energy_new
 
     path  = _model_path(B)
     model = ct.convert(prog,
@@ -354,6 +361,38 @@ def _compile(B):
                        minimum_deployment_target=ct.target.macOS13)
     model.save(str(path))
     return ct.models.MLModel(str(path), compute_units=_compute_unit())
+
+
+def _alloc_input_bufs():
+    """Pre-allocate one input buffer dict per bucket to avoid per-tick malloc."""
+    bufs = {}
+    for B in BUCKETS:
+        bufs[B] = {
+            'x_pos':            np.zeros(B,                      dtype=np.float32),
+            'y_pos':            np.zeros(B,                      dtype=np.float32),
+            'angle':            np.zeros(B,                      dtype=np.float32),
+            'half_fov':         np.zeros(B,                      dtype=np.float32),
+            'ray_len_pix':      np.zeros(B,                      dtype=np.float32),
+            'size_pix':         np.zeros(B,                      dtype=np.float32),
+            'energy_frac':      np.zeros(B,                      dtype=np.float32),
+            'W1':               np.zeros((B, N_INPUTS, N_HIDDEN),  dtype=np.float32),
+            'W2':               np.zeros((B, N_HIDDEN, N_OUTPUTS), dtype=np.float32),
+            'Wh':               np.zeros((B, N_HIDDEN, N_HIDDEN),  dtype=np.float32),
+            'h_prev':           np.zeros((B, N_HIDDEN),            dtype=np.float32),
+            'mask':             np.zeros((B, N_HIDDEN),            dtype=np.float32),
+            'n_rays_mask':      np.zeros((B, N_RAYS * 5),          dtype=np.float32),
+            'b1':               np.zeros((B, N_HIDDEN),            dtype=np.float32),
+            'b2':               np.zeros((B, N_OUTPUTS),           dtype=np.float32),
+            'turn_s':           np.zeros(B,                      dtype=np.float32),
+            'speed_base':       np.zeros(B,                      dtype=np.float32),
+            'size_world':       np.zeros(B,                      dtype=np.float32),
+            'n_rays_f':         np.zeros(B,                      dtype=np.float32),
+            'active_neurons_f': np.zeros(B,                      dtype=np.float32),
+            'energy':           np.zeros(B,                      dtype=np.float32),
+            # grid flats: replaced each tick with views from painter buffers
+            'r_flat': None, 'g_flat': None, 'b_flat': None, 'food_flat': None,
+        }
+    return bufs
 
 
 # ── public inference ──────────────────────────────────────────────────────────
@@ -401,71 +440,49 @@ def run_sense_brain(pop: dict, food: np.ndarray):
         + pop['active_neurons'] ** 1.5 * BRAIN_TAX
     )
     energy_new = (energy_raw * (1.0 - AGE_TAX)).astype(np.float32)
-    return h_new, out, x_new, y_new, angle_new, speeds, energy_new
+    return h_new, x_new, y_new, angle_new, energy_new
 
 
 def _predict(pop, food):
     n      = len(pop['x'])
     bucket = next(b for b in BUCKETS if b >= n)
     model  = _models[bucket]
+    bufs   = _input_bufs[bucket]
 
-    energy_max  = ENERGY_MAX_SCALE * pop['size'] ** 2
-    energy_frac = (pop['energy'] / energy_max).astype(np.float32)
-    half_fov    = (pop['fov'] * 0.5).astype(np.float32)
-    ray_len_pix = np.maximum(pop['ray_len'] * GRID_SCALE, 1.0).astype(np.float32)
-    size_pix    = np.ceil(pop['size'] * GRID_SCALE).astype(np.float32)
+    energy_max = ENERGY_MAX_SCALE * pop['size'] ** 2
 
-    r_flat, g_flat, b_flat, food_flat = paint_color_grids(pop, food)
+    bufs['x_pos'][:n]           = pop['x']
+    bufs['y_pos'][:n]           = pop['y']
+    bufs['angle'][:n]           = pop['angle']
+    bufs['half_fov'][:n]        = pop['fov'] * 0.5
+    bufs['ray_len_pix'][:n]     = np.maximum(pop['ray_len'] * GRID_SCALE, 1.0)
+    bufs['size_pix'][:n]        = np.ceil(pop['size'] * GRID_SCALE)
+    bufs['energy_frac'][:n]     = pop['energy'] / energy_max
+    bufs['W1'][:n]              = pop['W1']
+    bufs['W2'][:n]              = pop['W2']
+    bufs['Wh'][:n]              = pop['Wh']
+    bufs['h_prev'][:n]          = pop['h_state']
+    bufs['b1'][:n]              = pop['b1']
+    bufs['b2'][:n]              = pop['b2']
+    bufs['turn_s'][:n]          = pop['turn_s']
+    bufs['speed_base'][:n]      = pop['speed']
+    bufs['size_world'][:n]      = pop['size']
+    bufs['n_rays_f'][:n]        = pop['n_rays']
+    bufs['active_neurons_f'][:n] = pop['active_neurons']
+    bufs['energy'][:n]          = pop['energy']
 
-    def _pad1(arr, fill=0.0):
-        if n == bucket:
-            return arr.astype(np.float32)
-        return np.concatenate([arr.astype(np.float32),
-                                np.full((bucket - n,), fill, dtype=np.float32)])
+    bufs['mask'][:n]        = _N_HID_RANGE < pop['active_neurons'][:, None]
+    ray_active              = _N_RAYS_RANGE < pop['n_rays'][:, None]
+    bufs['n_rays_mask'][:n] = np.repeat(ray_active, 5, axis=1)
 
-    def _padn(arr):
-        if n == bucket:
-            return arr.astype(np.float32)
-        return np.concatenate([arr.astype(np.float32),
-                                np.zeros((bucket - n,) + arr.shape[1:], dtype=np.float32)])
+    bufs['r_flat'], bufs['g_flat'], bufs['b_flat'], bufs['food_flat'] = \
+        paint_color_grids(pop, food)
 
-    mask        = (np.arange(N_HIDDEN) < pop['active_neurons'][:, None]).astype(np.float32)
-    ray_active  = (np.arange(N_RAYS)[None, :] < pop['n_rays'][:, None]).astype(np.float32)
-    n_rays_mask = np.repeat(ray_active, 5, axis=1)
-
-    r = model.predict({
-        'x_pos':       _pad1(pop['x']),
-        'y_pos':       _pad1(pop['y']),
-        'angle':       _pad1(pop['angle']),
-        'half_fov':    _pad1(half_fov),
-        'ray_len_pix': _pad1(ray_len_pix, fill=1.0),
-        'size_pix':    _pad1(size_pix,    fill=1.0),
-        'energy_frac': _pad1(energy_frac),
-        'r_flat':      r_flat,
-        'g_flat':      g_flat,
-        'b_flat':      b_flat,
-        'food_flat':   food_flat,
-        'W1':          _padn(pop['W1']),
-        'W2':          _padn(pop['W2']),
-        'Wh':          _padn(pop['Wh']),
-        'h_prev':      _padn(pop['h_state']),
-        'mask':        _padn(mask),
-        'n_rays_mask': _padn(n_rays_mask),
-        'b1':          _padn(pop['b1']),
-        'b2':          _padn(pop['b2']),
-        'turn_s':           _pad1(pop['turn_s']),
-        'speed_base':       _pad1(pop['speed']),
-        'size_world':       _pad1(pop['size']),
-        'n_rays_f':         _pad1(pop['n_rays'].astype(np.float32)),
-        'active_neurons_f': _pad1(pop['active_neurons'].astype(np.float32)),
-        'energy':           _pad1(pop['energy']),
-    })
+    r = model.predict(bufs)
     return (
         r['h_new'][:n],
-        r['out'][:n],
         r['x_new'][:n],
         r['y_new'][:n],
         r['angle_new'][:n],
-        r['speeds'][:n],
         r['energy_new'][:n],
     )

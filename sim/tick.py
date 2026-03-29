@@ -3,7 +3,7 @@ import numpy as np
 from sim.config import (
     WIDTH, HEIGHT, N_FOOD, MAX_POP,
     ENERGY_FOOD, COASTLINE_X, ENERGY_SUNLIGHT,
-    ENERGY_MAX_SCALE, DRAIN_SCALE, SIZE_TAX, SPEED_TAX, TURN_TAX, AGE_TAX, SENSING_TAX, BRAIN_TAX
+    ENERGY_MAX_SCALE,
 )
 from sim.vents import refill_vents
 from sim.grid.painter import paint_idx_grid
@@ -25,8 +25,7 @@ def tick(world, rng):
 
     # ── sense + brain + move (fused GPU dispatch) ─────────────────────────────
     idx_grid   = paint_idx_grid(pop)
-    h_new, out, x_new, y_new, angle_new, speeds, energy_new = run_sense_brain(pop, food)
-    turns          = out[:, 0] * pop['turn_s']   # kept for HGT/predation if needed
+    h_new, x_new, y_new, angle_new, energy_new = run_sense_brain(pop, food)
     pop['h_state'] = h_new
     pop['angle']   = angle_new
     pop['x']       = x_new
@@ -108,13 +107,22 @@ def tick(world, rng):
     col_idx = (ox[:, None, None] + _PR_OFF[None, None, :]) % GW
     j_idx   = idx_grid[row_idx, col_idx].reshape(len(pop['x']), -1)
 
-    hunted, prey_gain, pred_idx, prey_idx = predation(pop, idx_grid, j_idx)
+    # shared patch geometry — computed once, used by both predation and contact_hgt
+    N      = len(pop['x'])
+    i_idx  = np.arange(N, dtype=np.int32)[:, None]
+    valid  = (j_idx >= 0) & (j_idx != i_idx)
+    j_safe = np.where(valid, j_idx, 0)
+    dx     = pop['x'][:, None] - pop['x'][j_safe]
+    dy     = pop['y'][:, None] - pop['y'][j_safe]
+    dist   = np.sqrt(dx * dx + dy * dy)
+
+    hunted, prey_gain, pred_idx, prey_idx = predation(pop, j_idx, valid, j_safe, dist)
     pop['energy'] = np.minimum(energy_max, pop['energy'] + prey_gain)
     pop['hunts'] += (prey_gain > 0).astype(np.int32)
 
     # ── horizontal gene transfer ──────────────────────────────────────────────
     eat_hgt(pop, pred_idx, prey_idx, rng)
-    contact_hgt(pop, j_idx, rng)
+    contact_hgt(pop, j_idx, valid, j_safe, dist, rng)
 
     # ── death ────────────────────────────────────────────────────────────────
     alive = (pop['energy'] > 0) & (~hunted)

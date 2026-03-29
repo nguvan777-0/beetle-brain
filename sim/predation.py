@@ -4,12 +4,12 @@ from sim.config import SIZE_MAX, CAMO_BONUS, CAMO_ENABLED
 from sim.grid.constants import PRED_R_PIX
 
 
-def predation(pop, idx_grid, j_idx):
+def predation(pop, j_idx, valid, j_safe, dist):
     """
-    For each wight, sample a (2*PRED_R_PIX+1)² patch of idx_grid to find
-    nearby candidates. Hunt prey that are smaller and in range.
+    Hunt prey that are smaller and in range.
 
-    j_idx: (N, patch²) int32 pre-computed by tick — shared with contact_hgt.
+    j_idx, valid, j_safe, dist: pre-computed patch geometry from tick — shared
+    with contact_hgt to avoid recomputing dx/dy/sqrt twice per tick.
     Returns (hunted mask (N,), prey_gain (N,), pred_idx, prey_idx).
     Energy is split among all hunters that hunt the same prey.
     """
@@ -19,14 +19,6 @@ def predation(pop, idx_grid, j_idx):
 
     brightness = (pop['r'].astype(np.float32) + pop['g'] + pop['b']) / (3.0 * 255.0)
     detect_r   = pop['size'] + (brightness * CAMO_BONUS if CAMO_ENABLED else 0.0)
-
-    i_idx  = np.arange(N, dtype=np.int32)[:, None]
-    valid  = (j_idx >= 0) & (j_idx != i_idx)
-    j_safe = np.where(valid, j_idx, 0)
-
-    dx   = pop['x'][:, None] - pop['x'][j_safe]
-    dy   = pop['y'][:, None] - pop['y'][j_safe]
-    dist = np.sqrt(dx * dx + dy * dy)
 
     in_range = dist < (pop['size'][:, None] + detect_r[j_safe])
     bigger   = pop['size'][:, None] > pop['size'][j_safe] * pop['pred_ratio'][:, None]

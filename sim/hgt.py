@@ -65,22 +65,14 @@ def eat_hgt(pop, predator_idx, prey_idx, rng):
         _crossover(pop, predator_idx[take], prey_idx[take], rng)
 
 
-def contact_hgt(pop, j_idx, rng):
+def contact_hgt(pop, j_idx, valid, j_safe, dist, rng):
     """HGT via proximity: wights in touching range roll against hgt_contact_rate.
 
-    j_idx: (N, patch²) int32 pre-computed by tick — shared with predation.
+    valid, j_safe, dist: pre-computed patch geometry shared with predation.
     """
     N = len(pop['x'])
     if N <= 1:
         return
-
-    i_idx = np.arange(N, dtype=np.int32)[:, None]
-    valid = (j_idx >= 0) & (j_idx != i_idx)
-    j_safe = np.where(valid, j_idx, 0)
-
-    dx   = pop['x'][:, None] - pop['x'][j_safe]
-    dy   = pop['y'][:, None] - pop['y'][j_safe]
-    dist = np.sqrt(dx * dx + dy * dy)
 
     in_contact = valid & (dist < (pop['size'][:, None] + pop['size'][j_safe]))
     rolls      = rng.random((N, j_idx.shape[1]))
