@@ -31,6 +31,7 @@ except ImportError:
 from sim.config import (
     N_RAYS, N_INPUTS, N_HIDDEN, N_OUTPUTS, MAX_POP, ENERGY_MAX_SCALE,
     WIDTH, HEIGHT,
+    DRAIN_SCALE, SPEED_TAX, TURN_TAX, SIZE_TAX, SENSING_TAX, BRAIN_TAX, AGE_TAX,
 )
 from sim.grid.constants import (
     GW, GH, GRID_SCALE, MAX_STEPS, _STEPS, _RAY_OFFSETS,
@@ -83,6 +84,7 @@ def _load_or_compile():
                 meta.get("has_bias")  is True      and
                 meta.get("has_cpu_paint") is True  and
                 meta.get("has_move")   is True      and
+                meta.get("has_drain") is True      and
                 meta.get("max_pop")   == MAX_POP   and
                 meta.get("buckets")   == BUCKETS   and
                 meta.get("compute_unit") == os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU') and
@@ -121,7 +123,7 @@ def _load_or_compile():
             "max_pop": MAX_POP, "n_rays": N_RAYS, "max_steps": MAX_STEPS,
             "gw": GW, "gh": GH, "n_hid": N_HIDDEN, "n_out": N_OUTPUTS,
             "has_nrays_mask": True, "has_wh": True, "has_rgb": True, "has_bias": True,
-            "has_cpu_paint": True, "has_move": True,
+            "has_cpu_paint": True, "has_move": True, "has_drain": True,
             "buckets": BUCKETS,
             "compute_unit": os.environ.get('BEETLE_COMPUTE_UNITS', 'CPU_AND_GPU'),
         }))
@@ -163,12 +165,16 @@ def _compile(B):
         mb.TensorSpec(shape=(B, N_OUTPUTS)),           # b2
         mb.TensorSpec(shape=(B,)),                     # turn_s
         mb.TensorSpec(shape=(B,)),                     # speed_base
+        mb.TensorSpec(shape=(B,)),                     # size_world
+        mb.TensorSpec(shape=(B,)),                     # n_rays_f
+        mb.TensorSpec(shape=(B,)),                     # active_neurons_f
+        mb.TensorSpec(shape=(B,)),                     # energy
     ])
     def prog(x_pos, y_pos, angle, half_fov,
              ray_len_pix, size_pix, energy_frac,
              r_flat, g_flat, b_flat, food_flat,
              W1, W2, Wh, h_prev, mask, n_rays_mask, b1, b2,
-             turn_s, speed_base):
+             turn_s, speed_base, size_world, n_rays_f, active_neurons_f, energy):
 
         steps_k   = mb.const(val=steps_c)
         offsets_k = mb.const(val=offsets_c)
@@ -305,7 +311,42 @@ def _compile(B):
         y_new = _wmod(mb.add(x=y_raw, y=w_h), w_h)
         x_new = mb.identity(x=x_new, name='x_new')
         y_new = mb.identity(x=y_new, name='y_new')
-        return h_new, out, x_new, y_new, angle_new, speeds
+
+        # ── metabolic drain + age decay ───────────────────────────────────────
+        ds   = mb.const(val=np.float32(DRAIN_SCALE))
+        st   = mb.const(val=np.float32(SPEED_TAX))
+        tt   = mb.const(val=np.float32(TURN_TAX))
+        szt  = mb.const(val=np.float32(SIZE_TAX))
+        sent = mb.const(val=np.float32(SENSING_TAX))
+        bt   = mb.const(val=np.float32(BRAIN_TAX))
+        at   = mb.const(val=np.float32(1.0 - AGE_TAX))
+        gs_c = mb.const(val=np.float32(GRID_SCALE))
+        p75  = mb.const(val=np.float32(0.75))
+        p2   = mb.const(val=np.float32(2.0))
+        p15  = mb.const(val=np.float32(1.5))
+
+        # base drain: DRAIN_SCALE * size^0.75
+        base_drain = mb.mul(x=mb.pow(x=size_world, y=p75), y=ds)
+        # speed tax: speeds^2 * SPEED_TAX
+        spd_drain  = mb.mul(x=mb.mul(x=speeds, y=speeds), y=st)
+        # turn tax: |turns| * size * TURN_TAX  (turns = out[:,0] * turn_s)
+        turns_mag  = mb.abs(x=mb.mul(x=mb.slice_by_index(x=out, begin=[0,0], end=[B,1], stride=[1,1]), y=mb.expand_dims(x=turn_s, axes=[-1])))
+        turns_1d   = mb.squeeze(x=turns_mag, axes=[-1])
+        trn_drain  = mb.mul(x=mb.mul(x=turns_1d, y=size_world), y=tt)
+        # size tax: size^2 * SIZE_TAX
+        sz2_drain  = mb.mul(x=mb.mul(x=size_world, y=size_world), y=szt)
+        # sensing tax: n_rays * ray_len * fov * SENSING_TAX
+        fov_full   = mb.mul(x=half_fov, y=two)  # two already defined above
+        ray_len_w  = mb.real_div(x=ray_len_pix, y=gs_c)
+        sns_drain  = mb.mul(x=mb.mul(x=mb.mul(x=n_rays_f, y=ray_len_w), y=fov_full), y=sent)
+        # brain tax: active_neurons^1.5 * BRAIN_TAX
+        brn_drain  = mb.mul(x=mb.pow(x=active_neurons_f, y=p15), y=bt)
+
+        total_drain = mb.add(x=mb.add(x=mb.add(x=mb.add(x=mb.add(
+            x=base_drain, y=spd_drain), y=trn_drain), y=sz2_drain), y=sns_drain), y=brn_drain)
+        energy_new  = mb.mul(x=mb.sub(x=energy, y=total_drain), y=at, name='energy_new')
+
+        return h_new, out, x_new, y_new, angle_new, speeds, energy_new
 
     path  = _model_path(B)
     model = ct.convert(prog,
@@ -351,7 +392,16 @@ def run_sense_brain(pop: dict, food: np.ndarray):
     angle_new = pop['angle'] + turns
     x_new     = (pop['x'] + np.cos(angle_new) * speeds) % WIDTH
     y_new     = (pop['y'] + np.sin(angle_new) * speeds) % HEIGHT
-    return h_new, out, x_new, y_new, angle_new, speeds
+    energy_raw = pop['energy'] - (
+        DRAIN_SCALE * pop['size'] ** 0.75
+        + speeds ** 2 * SPEED_TAX
+        + np.abs(turns) * pop['size'] * TURN_TAX
+        + pop['size'] ** 2 * SIZE_TAX
+        + pop['n_rays'] * pop['ray_len'] * pop['fov'] * SENSING_TAX
+        + pop['active_neurons'] ** 1.5 * BRAIN_TAX
+    )
+    energy_new = (energy_raw * (1.0 - AGE_TAX)).astype(np.float32)
+    return h_new, out, x_new, y_new, angle_new, speeds, energy_new
 
 
 def _predict(pop, food):
@@ -403,8 +453,12 @@ def _predict(pop, food):
         'n_rays_mask': _padn(n_rays_mask),
         'b1':          _padn(pop['b1']),
         'b2':          _padn(pop['b2']),
-        'turn_s':      _pad1(pop['turn_s']),
-        'speed_base':  _pad1(pop['speed']),
+        'turn_s':           _pad1(pop['turn_s']),
+        'speed_base':       _pad1(pop['speed']),
+        'size_world':       _pad1(pop['size']),
+        'n_rays_f':         _pad1(pop['n_rays'].astype(np.float32)),
+        'active_neurons_f': _pad1(pop['active_neurons'].astype(np.float32)),
+        'energy':           _pad1(pop['energy']),
     })
     return (
         r['h_new'][:n],
@@ -413,4 +467,5 @@ def _predict(pop, food):
         r['y_new'][:n],
         r['angle_new'][:n],
         r['speeds'][:n],
+        r['energy_new'][:n],
     )

@@ -25,21 +25,14 @@ def tick(world, rng):
 
     # ── sense + brain + move (fused GPU dispatch) ─────────────────────────────
     idx_grid   = paint_idx_grid(pop)
-    h_new, out, x_new, y_new, angle_new, speeds = run_sense_brain(pop, food)
-    turns          = out[:, 0] * pop['turn_s']   # kept for drain formula
+    h_new, out, x_new, y_new, angle_new, speeds, energy_new = run_sense_brain(pop, food)
+    turns          = out[:, 0] * pop['turn_s']   # kept for HGT/predation if needed
     pop['h_state'] = h_new
     pop['angle']   = angle_new
     pop['x']       = x_new
     pop['y']       = y_new
 
-    # ── metabolic drain ──────────────────────────────────────────────────────
-    drain = DRAIN_SCALE * pop['size'] ** 0.75   # Kleiber's law
-    pop['energy'] -= (drain
-                      + speeds**2               * SPEED_TAX
-                      + np.abs(turns) * pop['size'] * TURN_TAX
-                      + pop['size']**2          * SIZE_TAX
-                      + pop['n_rays'] * pop['ray_len'] * pop['fov'] * SENSING_TAX
-                      + pop['active_neurons']**1.5  * BRAIN_TAX)
+    pop['energy'] = energy_new
 
     # ── sunlight (land only) ─────────────────────────────────────────────────
     if ENERGY_SUNLIGHT > 0 and world.get('day', True):
@@ -60,7 +53,6 @@ def tick(world, rng):
             energy_gain[land_mask] = gain
             pop['energy'] += energy_gain
 
-    pop['energy'] *= (1.0 - AGE_TAX)
     pop['age']    += 1
 
     # ── eat food ─────────────────────────────────────────────────────────────
